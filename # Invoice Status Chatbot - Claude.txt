@@ -1,0 +1,1718 @@
+# Invoice Status Chatbot - Complete Solution
+
+## Project Structure
+```
+invoice-chatbot/
+├── backend/
+│   ├── app/
+│   │   ├── __init__.py
+│   │   ├── main.py
+│   │   ├── models/
+│   │   │   ├── __init__.py
+│   │   │   ├── invoice.py
+│   │   │   ├── user.py
+│   │   │   └── conversation.py
+│   │   ├── agents/
+│   │   │   ├── __init__.py
+│   │   │   ├── invoice_agent.py
+│   │   │   ├── validation_agent.py
+│   │   │   └── service_agent.py
+│   │   ├── services/
+│   │   │   ├── __init__.py
+│   │   │   ├── sap_service.py
+│   │   │   ├── servicenow_service.py
+│   │   │   └── memory_service.py
+│   │   ├── utils/
+│   │   │   ├── __init__.py
+│   │   │   ├── validators.py
+│   │   │   └── config.py
+│   │   └── tests/
+│   │       ├── __init__.py
+│   │       ├── test_agents.py
+│   │       ├── test_services.py
+│   │       └── test_validators.py
+│   ├── requirements.txt
+│   └── Dockerfile
+├── frontend/
+│   ├── react-app/
+│   │   ├── src/
+│   │   │   ├── components/
+│   │   │   ├── services/
+│   │   │   └── utils/
+│   │   ├── package.json
+│   │   └── public/
+│   └── streamlit-app/
+│       ├── main.py
+│       └── requirements.txt
+├── docs/
+│   ├── functional_spec.md
+│   ├── technical_spec.md
+│   └── api_documentation.md
+├── config/
+│   ├── settings.yaml
+│   └── environment.env
+├── docker-compose.yml
+├── README.md
+└── deployment/
+    ├── kubernetes/
+    └── terraform/
+```
+
+## 1. Backend Implementation
+
+### Main FastAPI Application (backend/app/main.py)
+
+```python
+"""
+Main FastAPI application for Invoice Status Chatbot
+Handles HTTP requests and orchestrates agent interactions
+"""
+
+from fastapi import FastAPI, HTTPException, Depends, UploadFile, File
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
+import uvicorn
+from typing import Optional, Dict, Any
+import logging
+from contextlib import asynccontextmanager
+
+from .models.invoice import InvoiceQuery, InvoiceResponse, ChatMessage
+from .models.user import UserSession
+from .agents.invoice_agent import InvoiceStatusAgent
+from .services.memory_service import MemoryService
+from .utils.config import get_settings
+from .utils.validators import validate_excel_upload
+
+# Configure logging for tracing and debugging
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    handlers=[
+        logging.FileHandler('logs/chatbot.log'),
+        logging.StreamHandler()
+    ]
+)
+logger = logging.getLogger(__name__)
+
+# Initialize services and configuration
+settings = get_settings()
+memory_service = MemoryService(settings.database_url)
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """
+    Application lifespan manager for initialization and cleanup
+    Ensures proper resource management
+    """
+    logger.info("Starting Invoice Status Chatbot application")
+    # Initialize database connections and agent services
+    await memory_service.initialize()
+    yield
+    # Cleanup resources on shutdown
+    await memory_service.cleanup()
+    logger.info("Shutting down Invoice Status Chatbot application")
+
+# Initialize FastAPI application with lifespan management
+app = FastAPI(
+    title="Invoice Status Chatbot API",
+    description="AI-powered chatbot for handling invoice status queries",
+    version="1.0.0",
+    lifespan=lifespan
+)
+
+# Configure CORS for frontend integration
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=settings.allowed_origins,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+# Initialize the main invoice agent
+invoice_agent = InvoiceStatusAgent(memory_service, settings)
+
+@app.get("/health")
+async def health_check():
+    """Health check endpoint for monitoring and deployment"""
+    return {"status": "healthy", "service": "invoice-chatbot"}
+
+@app.post("/chat", response_model=InvoiceResponse)
+async def chat_endpoint(
+    message: ChatMessage,
+    session_id: str = Depends(get_session_id)
+):
+    """
+    Main chat endpoint that processes user messages through the agent workflow
+    Handles natural language processing and conversation state management
+    """
+    try:
+        logger.info(f"Processing chat message for session: {session_id}")
+        
+        # Process message through the autonomous agent
+        response = await invoice_agent.process_message(
+            message.content, 
+            session_id,
+            message.user_type
+        )
+        
+        # Store conversation in long-term memory
+        await memory_service.store_conversation(
+            session_id, 
+            message.content, 
+            response.content
+        )
+        
+        logger.info(f"Successfully processed message for session: {session_id}")
+        return response
+        
+    except Exception as e:
+        logger.error(f"Error processing chat message: {str(e)}")
+        raise HTTPException(
+            status_code=500, 
+            detail="Internal server error processing your request"
+        )
+
+@app.post("/upload-template")
+async def upload_invoice_template(
+    file: UploadFile = File(...),
+    session_id: str = Depends(get_session_id)
+):
+    """
+    Handles Excel template upload for batch invoice processing
+    Validates file format and converts to JSON for agent processing
+    """
+    try:
+        logger.info(f"Processing file upload for session: {session_id}")
+        
+        # Validate file type and structure
+        if not file.filename.endswith(('.xlsx', '.xls')):
+            raise HTTPException(
+                status_code=400, 
+                detail="Please upload a valid Excel file (.xlsx or .xls)"
+            )
+        
+        # Read and validate Excel content
+        file_content = await file.read()
+        invoice_data = validate_excel_upload(file_content)
+        
+        # Process through agent for validation and status checking
+        response = await invoice_agent.process_excel_data(
+            invoice_data, 
+            session_id
+        )
+        
+        logger.info(f"Successfully processed file upload for session: {session_id}")
+        return {"status": "success", "data": response}
+        
+    except Exception as e:
+        logger.error(f"Error processing file upload: {str(e)}")
+        raise HTTPException(
+            status_code=400, 
+            detail=f"Error processing uploaded file: {str(e)}"
+        )
+
+@app.get("/download-template/{invoice_type}")
+async def download_template(invoice_type: str):
+    """
+    Provides downloadable Excel templates for PO and Non-PO invoices
+    Templates include required fields and validation rules
+    """
+    try:
+        if invoice_type not in ["po", "non-po"]:
+            raise HTTPException(
+                status_code=400, 
+                detail="Invoice type must be 'po' or 'non-po'"
+            )
+        
+        # Generate appropriate template based on invoice type
+        template_path = f"templates/{invoice_type}_template.xlsx"
+        
+        return FileResponse(
+            template_path,
+            filename=f"{invoice_type}_invoice_template.xlsx",
+            media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        )
+        
+    except Exception as e:
+        logger.error(f"Error generating template: {str(e)}")
+        raise HTTPException(
+            status_code=500, 
+            detail="Error generating template file"
+        )
+
+def get_session_id(session_id: Optional[str] = None) -> str:
+    """
+    Dependency to handle session management
+    Creates new session if none provided
+    """
+    if not session_id:
+        import uuid
+        session_id = str(uuid.uuid4())
+    return session_id
+
+if __name__ == "__main__":
+    uvicorn.run(
+        "app.main:app",
+        host="0.0.0.0",
+        port=8000,
+        reload=True,
+        log_level="info"
+    )
+```
+
+### Invoice Agent Implementation (backend/app/agents/invoice_agent.py)
+
+```python
+"""
+Main Invoice Status Agent using LangGraph for autonomous workflow orchestration
+Handles conversation flow, information collection, and external API integration
+"""
+
+from typing import Dict, Any, List, Optional, Tuple
+from langchain.schema import BaseMessage, HumanMessage, AIMessage
+from langchain.llms.base import LLM
+from langchain.prompts import ChatPromptTemplate
+from langgraph import StateGraph, END
+from langmem import ShortTermMemory
+import json
+import logging
+from datetime import datetime
+
+from ..models.invoice import InvoiceType, InvoiceQuery, InvoiceResponse, ValidationResult
+from ..services.sap_service import SAPService
+from ..services.servicenow_service import ServiceNowService
+from ..services.memory_service import MemoryService
+from ..utils.validators import InvoiceValidator
+from ..utils.config import Settings
+
+logger = logging.getLogger(__name__)
+
+class ConversationState:
+    """
+    Maintains conversation state throughout the agent workflow
+    Tracks collected information, validation status, and next steps
+    """
+    def __init__(self):
+        self.session_id: str = ""
+        self.user_type: str = ""  # internal or external
+        self.invoice_type: Optional[InvoiceType] = None
+        self.collected_info: Dict[str, Any] = {}
+        self.validation_results: List[ValidationResult] = []
+        self.current_step: str = "greeting"
+        self.conversation_history: List[BaseMessage] = []
+        self.user_satisfied: Optional[bool] = None
+        self.wants_ticket: Optional[bool] = None
+        self.user_email: Optional[str] = None
+
+class InvoiceStatusAgent:
+    """
+    Autonomous agent for handling invoice status queries using LangGraph workflow
+    Orchestrates conversation flow, validation, and external system integration
+    """
+    
+    def __init__(self, memory_service: MemoryService, settings: Settings):
+        self.memory_service = memory_service
+        self.settings = settings
+        self.short_term_memory = ShortTermMemory(max_tokens=4000)
+        self.sap_service = SAPService(settings.sap_config)
+        self.servicenow_service = ServiceNowService(settings.servicenow_config)
+        self.validator = InvoiceValidator()
+        
+        # Initialize configurable LLM provider
+        self.llm = self._initialize_llm(settings.llm_provider)
+        
+        # Build the autonomous workflow graph
+        self.workflow = self._build_workflow()
+    
+    def _initialize_llm(self, provider_config: Dict[str, Any]) -> LLM:
+        """
+        Initialize configurable LLM provider (OpenAI, Anthropic, etc.)
+        Allows switching between different language models
+        """
+        provider_type = provider_config.get("type", "openai")
+        
+        if provider_type == "openai":
+            from langchain.llms import OpenAI
+            return OpenAI(
+                api_key=provider_config["api_key"],
+                model_name=provider_config.get("model", "gpt-4"),
+                temperature=0.3
+            )
+        elif provider_type == "anthropic":
+            from langchain.llms import Anthropic
+            return Anthropic(
+                api_key=provider_config["api_key"],
+                model=provider_config.get("model", "claude-3-sonnet")
+            )
+        else:
+            raise ValueError(f"Unsupported LLM provider: {provider_type}")
+    
+    def _build_workflow(self) -> StateGraph:
+        """
+        Constructs the LangGraph workflow for autonomous conversation handling
+        Defines nodes and edges for each step in the invoice query process
+        """
+        workflow = StateGraph(ConversationState)
+        
+        # Define workflow nodes for each major step
+        workflow.add_node("greeting", self._handle_greeting)
+        workflow.add_node("determine_invoice_type", self._determine_invoice_type)
+        workflow.add_node("collect_information", self._collect_information)
+        workflow.add_node("validate_information", self._validate_information)
+        workflow.add_node("query_sap", self._query_sap_system)
+        workflow.add_node("explain_status", self._explain_invoice_status)
+        workflow.add_node("collect_feedback", self._collect_user_feedback)
+        workflow.add_node("handle_ticket_request", self._handle_ticket_request)
+        workflow.add_node("create_ticket", self._create_servicenow_ticket)
+        workflow.add_node("end_conversation", self._end_conversation)
+        
+        # Define workflow edges and conditions
+        workflow.add_edge("greeting", "determine_invoice_type")
+        workflow.add_conditional_edges(
+            "determine_invoice_type",
+            self._should_collect_info,
+            {
+                "collect": "collect_information",
+                "ask_type": "determine_invoice_type"
+            }
+        )
+        workflow.add_edge("collect_information", "validate_information")
+        workflow.add_conditional_edges(
+            "validate_information",
+            self._validation_check,
+            {
+                "valid": "query_sap",
+                "invalid": "collect_information"
+            }
+        )
+        workflow.add_edge("query_sap", "explain_status")
+        workflow.add_edge("explain_status", "collect_feedback")
+        workflow.add_conditional_edges(
+            "collect_feedback",
+            self._feedback_check,
+            {
+                "satisfied": "handle_ticket_request",
+                "not_satisfied": "collect_information"
+            }
+        )
+        workflow.add_conditional_edges(
+            "handle_ticket_request",
+            self._ticket_decision,
+            {
+                "create_ticket": "create_ticket",
+                "no_ticket": "end_conversation"
+            }
+        )
+        workflow.add_edge("create_ticket", "end_conversation")
+        workflow.add_edge("end_conversation", END)
+        
+        # Set entry point
+        workflow.set_entry_point("greeting")
+        
+        return workflow.compile()
+    
+    async def process_message(
+        self, 
+        message: str, 
+        session_id: str, 
+        user_type: str = "external"
+    ) -> InvoiceResponse:
+        """
+        Main entry point for processing user messages through the autonomous workflow
+        Maintains conversation state and orchestrates appropriate responses
+        """
+        try:
+            logger.info(f"Processing message: {message[:100]}...")
+            
+            # Retrieve or create conversation state
+            state = await self._get_conversation_state(session_id, user_type)
+            
+            # Add user message to conversation history
+            state.conversation_history.append(HumanMessage(content=message))
+            
+            # Store in short-term memory for context
+            self.short_term_memory.add_message(session_id, message, "user")
+            
+            # Process through the autonomous workflow
+            result = await self.workflow.ainvoke(state)
+            
+            # Update conversation state
+            await self._save_conversation_state(result)
+            
+            # Generate response based on current workflow state
+            response_content = await self._generate_response(result)
+            
+            # Store assistant response in memory
+            self.short_term_memory.add_message(
+                session_id, 
+                response_content, 
+                "assistant"
+            )
+            
+            return InvoiceResponse(
+                content=response_content,
+                session_id=session_id,
+                next_step=result.current_step,
+                collected_info=result.collected_info
+            )
+            
+        except Exception as e:
+            logger.error(f"Error processing message: {str(e)}")
+            return InvoiceResponse(
+                content="I apologize, but I encountered an error processing your request. Please try again.",
+                session_id=session_id,
+                error=str(e)
+            )
+    
+    async def _handle_greeting(self, state: ConversationState) -> ConversationState:
+        """
+        Handles initial greeting and explains chatbot capabilities
+        Sets up conversation context and available options
+        """
+        logger.info("Handling greeting step")
+        
+        # Check if user is directly asking about invoice status
+        last_message = state.conversation_history[-1].content.lower()
+        
+        if any(keyword in last_message for keyword in ["invoice", "status", "check", "po", "payment"]):
+            # User is directly asking about invoice status
+            state.current_step = "determine_invoice_type"
+        else:
+            # Provide greeting and capabilities explanation
+            state.current_step = "greeting_complete"
+        
+        return state
+    
+    async def _determine_invoice_type(self, state: ConversationState) -> ConversationState:
+        """
+        Extracts and determines invoice type (PO or Non-PO) from user input
+        Uses LLM to understand natural language intent
+        """
+        logger.info("Determining invoice type")
+        
+        # Create prompt for invoice type classification
+        prompt = ChatPromptTemplate.from_template("""
+        Analyze the user's message and determine if they are asking about:
+        1. PO (Purchase Order) invoices
+        2. Non-PO invoices
+        3. Unclear/Not specified
+        
+        User message: {message}
+        Previous context: {context}
+        
+        Respond with just: "PO", "NON-PO", or "UNCLEAR"
+        """)
+        
+        last_message = state.conversation_history[-1].content
+        context = self.short_term_memory.get_context(state.session_id)
+        
+        # Use LLM to classify invoice type
+        response = await self.llm.ainvoke(
+            prompt.format(message=last_message, context=context)
+        )
+        
+        classification = response.strip().upper()
+        
+        if classification == "PO":
+            state.invoice_type = InvoiceType.PO
+            state.current_step = "collect_information"
+        elif classification == "NON-PO":
+            state.invoice_type = InvoiceType.NON_PO
+            state.current_step = "collect_information"
+        else:
+            # Need to ask for clarification
+            state.current_step = "ask_invoice_type"
+        
+        return state
+    
+    async def _collect_information(self, state: ConversationState) -> ConversationState:
+        """
+        Collects required information based on invoice type
+        Extracts structured data from natural language input
+        """
+        logger.info(f"Collecting information for {state.invoice_type} invoice")
+        
+        # Extract information from user input using LLM
+        extraction_prompt = self._get_extraction_prompt(state.invoice_type)
+        last_message = state.conversation_history[-1].content
+        
+        extracted_info = await self._extract_invoice_info(
+            last_message, 
+            extraction_prompt
+        )
+        
+        # Merge with existing collected information
+        state.collected_info.update(extracted_info)
+        
+        # Check if we have enough information for validation
+        required_fields = self._get_required_fields(state.invoice_type)
+        missing_fields = [
+            field for field in required_fields 
+            if field not in state.collected_info or not state.collected_info[field]
+        ]
+        
+        if missing_fields:
+            state.current_step = "request_missing_info"
+        else:
+            state.current_step = "validate_information"
+        
+        return state
+    
+    async def _validate_information(self, state: ConversationState) -> ConversationState:
+        """
+        Validates collected information against business rules
+        Checks for required field combinations
+        """
+        logger.info("Validating collected information")
+        
+        validation_result = self.validator.validate_invoice_data(
+            state.collected_info,
+            state.invoice_type
+        )
+        
+        state.validation_results = [validation_result]
+        
+        if validation_result.is_valid:
+            state.current_step = "query_sap"
+        else:
+            state.current_step = "validation_error"
+        
+        return state
+    
+    async def _query_sap_system(self, state: ConversationState) -> ConversationState:
+        """
+        Queries SAP S4 system for invoice status
+        Handles API integration and error scenarios
+        """
+        logger.info("Querying SAP system for invoice status")
+        
+        try:
+            # Query SAP system with validated information
+            invoice_status = await self.sap_service.get_invoice_status(
+                state.collected_info,
+                state.invoice_type
+            )
+            
+            state.collected_info['sap_response'] = invoice_status
+            
+            if invoice_status:
+                state.current_step = "explain_status"
+            else:
+                state.current_step = "invoice_not_found"
+                
+        except Exception as e:
+            logger.error(f"SAP query error: {str(e)}")
+            state.current_step = "sap_error"
+            state.collected_info['error'] = str(e)
+        
+        return state
+    
+    async def _explain_invoice_status(self, state: ConversationState) -> ConversationState:
+        """
+        Explains retrieved invoice status in natural language
+        Provides clear, user-friendly status information
+        """
+        logger.info("Explaining invoice status to user")
+        
+        # Use LLM to generate natural language explanation
+        explanation_prompt = ChatPromptTemplate.from_template("""
+        Explain the following invoice status information in clear, user-friendly language:
+        
+        Invoice Data: {invoice_data}
+        SAP Response: {sap_response}
+        User Type: {user_type}
+        
+        Provide a clear explanation of:
+        1. Current invoice status
+        2. Any important details or next steps
+        3. Timeline information if available
+        """)
+        
+        explanation = await self.llm.ainvoke(
+            explanation_prompt.format(
+                invoice_data=state.collected_info,
+                sap_response=state.collected_info.get('sap_response', {}),
+                user_type=state.user_type
+            )
+        )
+        
+        state.collected_info['status_explanation'] = explanation
+        state.current_step = "collect_feedback"
+        
+        return state
+    
+    async def _collect_user_feedback(self, state: ConversationState) -> ConversationState:
+        """
+        Collects user satisfaction feedback
+        Determines if user needs additional assistance
+        """
+        logger.info("Collecting user feedback")
+        
+        last_message = state.conversation_history[-1].content.lower()
+        
+        # Simple sentiment analysis for Yes/No responses
+        if any(word in last_message for word in ["yes", "satisfied", "good", "helpful"]):
+            state.user_satisfied = True
+            state.current_step = "handle_ticket_request"
+        elif any(word in last_message for word in ["no", "not satisfied", "problem", "issue"]):
+            state.user_satisfied = False
+            state.current_step = "collect_information"  # Retry process
+        else:
+            state.current_step = "ask_satisfaction"
+        
+        return state
+    
+    # Additional workflow methods would continue here...
+    # (Due to length constraints, showing key structural elements)
+```
+
+### Pydantic Models (backend/app/models/invoice.py)
+
+```python
+"""
+Pydantic models for invoice data validation and serialization
+Ensures type safety and data consistency throughout the application
+"""
+
+from pydantic import BaseModel, Field, validator
+from typing import Optional, Dict, Any, List
+from enum import Enum
+from datetime import datetime
+
+class InvoiceType(str, Enum):
+    """Enumeration for supported invoice types"""
+    PO = "po"
+    NON_PO = "non_po"
+
+class UserType(str, Enum):
+    """Enumeration for user persona types"""
+    INTERNAL = "internal"
+    EXTERNAL = "external"
+
+class ChatMessage(BaseModel):
+    """Model for incoming chat messages from users"""
+    content: str = Field(..., min_length=1, max_length=5000)
+    user_type: UserType = UserType.EXTERNAL
+    session_id: Optional[str] = None
+    timestamp: datetime = Field(default_factory=datetime.now)
+
+class InvoiceQuery(BaseModel):
+    """Model for structured invoice query data"""
+    invoice_type: InvoiceType
+    po_number: Optional[str] = None
+    acr_number: Optional[str] = None
+    invoice_number: Optional[str] = None
+    invoice_amount: Optional[float] = None
+    invoice_year: Optional[int] = None
+    invoice_document_date: Optional[datetime] = None
+    
+    @validator('invoice_year')
+    def validate_year(cls, v):
+        """Validates invoice year is within reasonable range"""
+        if v and (v < 2000 or v > datetime.now().year + 1):
+            raise ValueError('Invoice year must be between 2000 and current year + 1')
+        return v
+
+class ValidationResult(BaseModel):
+    """Model for validation results with detailed feedback"""
+    is_valid: bool
+    error_messages: List[str] = []
+    missing_fields: List[str] = []
+    validation_type: str
+    
+class InvoiceStatus(BaseModel):
+    """Model for SAP system invoice status response"""
+    invoice_id: str
+    status: str
+    amount: Optional[float] = None
+    due_date: Optional[datetime] = None
+    payment_date: Optional[datetime] = None
+    vendor_info: Optional[Dict[str, Any]] = {}
+    additional_details: Optional[Dict[str, Any]] = {}
+
+class InvoiceResponse(BaseModel):
+    """Model for chatbot responses to users"""
+    content: str
+    session_id: str
+    next_step: Optional[str] = None
+    collected_info: Optional[Dict[str, Any]] = {}
+    invoice_status: Optional[InvoiceStatus] = None
+    error: Optional[str] = None
+    timestamp: datetime = Field(default_factory=datetime.now)
+```
+
+### Validation Utilities (backend/app/utils/validators.py)
+
+```python
+"""
+Comprehensive validation utilities for invoice data
+Implements business rules for PO and Non-PO invoice validation
+"""
+
+from typing import Dict, Any, List, Tuple, Optional
+import pandas as pd
+from datetime import datetime
+import re
+
+from ..models.invoice import InvoiceType, ValidationResult
+
+class InvoiceValidator:
+    """
+    Handles validation of invoice data against business rules
+    Implements the complex validation combinations specified in requirements
+    """
+    
+    def __init__(self):
+        # Define validation combinations for each invoice type
+        self.po_combinations = [
+            ["po_number", "invoice_number", "invoice_year"],
+            ["po_number", "invoice_amount", "invoice_year"]
+        ]
+        
+        self.non_po_combinations = [
+            ["acr_number", "invoice_number", "invoice_year"],
+            ["acr_number", "invoice_document_date", "invoice_year"],
+            ["acr_number", "invoice_amount", "invoice_year"],
+            ["invoice_number", "invoice_document_date", "invoice_year"],
+            ["invoice_number", "invoice_amount", "invoice_year"]
+        ]
+    
+    def validate_invoice_data(
+        self, 
+        data: Dict[str, Any], 
+        invoice_type: InvoiceType
+    ) -> ValidationResult:
+        """
+        Main validation method that checks if provided data meets
+        the required field combinations for the specified invoice type
+        """
+        try:
+            if invoice_type == InvoiceType.PO:
+                return self._validate_po_invoice(data)
+            elif invoice_type == InvoiceType.NON_PO:
+                return self._validate_non_po_invoice(data)
+            else:
+                return ValidationResult(
+                    is_valid=False,
+                    error_messages=["Invalid invoice type specified"],
+                    validation_type="type_check"
+                )
+        except Exception as e:
+            return ValidationResult(
+                is_valid=False,
+                error_messages=[f"Validation error: {str(e)}"],
+                validation_type="exception"
+            )
+    
+    def _validate_po_invoice(self, data: Dict[str, Any]) -> ValidationResult:
+        """
+        Validates PO invoice data against required field combinations:
+        1. PO Number + Invoice Number + Invoice Year
+        2. PO Number + Invoice Amount + Invoice Year
+        """
+        valid_combinations = []
+        missing_fields_per_combo = []
+        
+        for combination in self.po_combinations:
+            missing_fields = []
+            has_all_fields = True
+            
+            for field in combination:
+                if field not in data or not data.get(field):
+                    missing_fields.append(field)
+                    has_all_fields = False
+            
+            if has_all_fields:
+                # Found a valid combination
+                additional_validation = self._validate_field_formats(data, combination)
+                if additional_validation.is_valid:
+                    return ValidationResult(
+                        is_valid=True,
+                        validation_type="po_invoice",
+                        error_messages=[]
+                    )
+                else:
+                    return additional_validation
+            else:
+                missing_fields_per_combo.append(missing_fields)
+        
+        # No valid combination found
+        error_messages = [
+            "Insufficient data for PO invoice validation. Please provide one of the following combinations:"
+        ]
+        for i, combo in enumerate(self.po_combinations):
+            missing = missing_fields_per_combo[i]
+            error_messages.append(
+                f"Option {i+1}: {', '.join(combo)} (Missing: {', '.join(missing)})"
+            )
+        
+        return ValidationResult(
+            is_valid=False,
+            error_messages=error_messages,
+            missing_fields=list(set(sum(missing_fields_per_combo, []))),
+            validation_type="po_invoice"
+        )
+    
+    def _validate_non_po_invoice(self, data: Dict[str, Any]) -> ValidationResult:
+        """
+        Validates Non-PO invoice data against required field combinations:
+        1. ACR Number + Invoice Number + Invoice Year
+        2. ACR Number + Invoice Document Date + Invoice Year  
+        3. ACR Number + Invoice Amount + Invoice Year
+        4. Invoice Number + Invoice Document Date + Invoice Year
+        5. Invoice Number + Invoice Amount + Invoice Year
+        """
+        valid_combinations = []
+        missing_fields_per_combo = []
+        
+        for combination in self.non_po_combinations:
+            missing_fields = []
+            has_all_fields = True
+            
+            for field in combination:
+                if field not in data or not data.get(field):
+                    missing_fields.append(field)
+                    has_all_fields = False
+            
+            if has_all_fields:
+                # Found a valid combination
+                additional_validation = self._validate_field_formats(data, combination)
+                if additional_validation.is_valid:
+                    return ValidationResult(
+                        is_valid=True,
+                        validation_type="non_po_invoice",
+                        error_messages=[]
+                    )
+                else:
+                    return additional_validation
+            else:
+                missing_fields_per_combo.append(missing_fields)
+        
+        # No valid combination found
+        error_messages = [
+            "Insufficient data for Non-PO invoice validation. Please provide one of the following combinations:"
+        ]
+        for i, combo in enumerate(self.non_po_combinations):
+            missing = missing_fields_per_combo[i]
+            error_messages.append(
+                f"Option {i+1}: {', '.join(combo)} (Missing: {', '.join(missing)})"
+            )
+        
+        return ValidationResult(
+            is_valid=False,
+            error_messages=error_messages,
+            missing_fields=list(set(sum(missing_fields_per_combo, []))),
+            validation_type="non_po_invoice"
+        )
+    
+    def _validate_field_formats(
+        self, 
+        data: Dict[str, Any], 
+        fields: List[str]
+    ) -> ValidationResult:
+        """
+        Validates the format and content of specific fields
+        Ensures data integrity and proper formatting
+        """
+        errors = []
+        
+        for field in fields:
+            value = data.get(field)
+            
+            if field == "po_number" and value:
+                if not self._validate_po_number_format(value):
+                    errors.append(f"Invalid PO number format: {value}")
+            
+            elif field == "acr_number" and value:
+                if not self._validate_acr_number_format(value):
+                    errors.append(f"Invalid ACR number format: {value}")
+            
+            elif field == "invoice_number" and value:
+                if not self._validate_invoice_number_format(value):
+                    errors.append(f"Invalid invoice number format: {value}")
+            
+            elif field == "invoice_amount" and value:
+                try:
+                    amount = float(value)
+                    if amount <= 0:
+                        errors.append("Invoice amount must be greater than 0")
+                except (ValueError, TypeError):
+                    errors.append(f"Invalid invoice amount: {value}")
+            
+            elif field == "invoice_year" and value:
+                try:
+                    year = int(value)
+                    current_year = datetime.now().year
+                    if year < 2000 or year > current_year + 1:
+                        errors.append(f"Invoice year must be between 2000 and {current_year + 1}")
+                except (ValueError, TypeError):
+                    errors.append(f"Invalid invoice year: {value}")
+        
+        return ValidationResult(
+            is_valid=len(errors) == 0,
+            error_messages=errors,
+            validation_type="format_validation"
+        )
+    
+    def _validate_po_number_format(self, po_number: str) -> bool:
+        """Validates PO number format (alphanumeric, 6-20 characters)"""
+        if not isinstance(po_number, str):
+            return False
+        pattern = r'^[A-Za-z0-9]{6,20}
+        return bool(re.match(pattern, po_number.strip()))
+    
+    def _validate_acr_number_format(self, acr_number: str) -> bool:
+        """Validates ACR number format (alphanumeric, 8-15 characters)"""
+        if not isinstance(acr_number, str):
+            return False
+        pattern = r'^[A-Za-z0-9]{8,15}
+        return bool(re.match(pattern, acr_number.strip()))
+    
+    def _validate_invoice_number_format(self, invoice_number: str) -> bool:
+        """Validates invoice number format (alphanumeric with hyphens, 6-25 characters)"""
+        if not isinstance(invoice_number, str):
+            return False
+        pattern = r'^[A-Za-z0-9\-]{6,25}
+        return bool(re.match(pattern, invoice_number.strip()))
+
+def validate_excel_upload(file_content: bytes) -> List[Dict[str, Any]]:
+    """
+    Validates and processes uploaded Excel files
+    Converts Excel data to structured format for agent processing
+    """
+    try:
+        # Read Excel file using pandas
+        df = pd.read_excel(file_content)
+        
+        # Standardize column names (remove spaces, convert to lowercase)
+        df.columns = df.columns.str.strip().str.lower().str.replace(' ', '_')
+        
+        # Expected column mappings
+        expected_columns = {
+            'po_number': ['po_number', 'po_no', 'purchase_order'],
+            'acr_number': ['acr_number', 'acr_no', 'acr'],
+            'invoice_number': ['invoice_number', 'invoice_no', 'inv_no'],
+            'invoice_amount': ['invoice_amount', 'amount', 'inv_amount'],
+            'invoice_year': ['invoice_year', 'year', 'inv_year'],
+            'invoice_document_date': ['invoice_document_date', 'document_date', 'inv_date']
+        }
+        
+        # Standardize column names based on mappings
+        column_mapping = {}
+        for standard_name, variations in expected_columns.items():
+            for col in df.columns:
+                if col in variations:
+                    column_mapping[col] = standard_name
+                    break
+        
+        df = df.rename(columns=column_mapping)
+        
+        # Convert to list of dictionaries
+        invoice_data = []
+        for _, row in df.iterrows():
+            # Skip empty rows
+            if row.isna().all():
+                continue
+            
+            # Convert row to dictionary, handling NaN values
+            row_dict = {}
+            for col, value in row.items():
+                if pd.notna(value):
+                    # Handle different data types
+                    if col in ['invoice_amount']:
+                        try:
+                            row_dict[col] = float(value)
+                        except (ValueError, TypeError):
+                            row_dict[col] = None
+                    elif col in ['invoice_year']:
+                        try:
+                            row_dict[col] = int(value)
+                        except (ValueError, TypeError):
+                            row_dict[col] = None
+                    else:
+                        row_dict[col] = str(value).strip()
+                else:
+                    row_dict[col] = None
+            
+            invoice_data.append(row_dict)
+        
+        if not invoice_data:
+            raise ValueError("No valid invoice data found in the uploaded file")
+        
+        return invoice_data
+        
+    except Exception as e:
+        raise ValueError(f"Error processing Excel file: {str(e)}")
+
+```
+
+### SAP Service Integration (backend/app/services/sap_service.py)
+
+```python
+"""
+Service for integrating with SAP S4 HANA system
+Handles authentication, API calls, and data transformation
+"""
+
+import aiohttp
+import asyncio
+from typing import Dict, Any, Optional, List
+import logging
+from datetime import datetime
+import json
+
+from ..models.invoice import InvoiceType, InvoiceStatus
+from ..utils.config import SAPConfig
+
+logger = logging.getLogger(__name__)
+
+class SAPService:
+    """
+    Handles all interactions with SAP S4 HANA system
+    Provides invoice status retrieval and related operations
+    """
+    
+    def __init__(self, config: SAPConfig):
+        self.config = config
+        self.session: Optional[aiohttp.ClientSession] = None
+        self.auth_token: Optional[str] = None
+        self.token_expires_at: Optional[datetime] = None
+    
+    async def __aenter__(self):
+        """Async context manager entry"""
+        await self._initialize_session()
+        return self
+    
+    async def __aexit__(self, exc_type, exc_val, exc_tb):
+        """Async context manager exit with cleanup"""
+        await self._cleanup_session()
+    
+    async def _initialize_session(self):
+        """Initialize HTTP session with proper configuration"""
+        timeout = aiohttp.ClientTimeout(total=30)
+        connector = aiohttp.TCPConnector(
+            limit=10,
+            limit_per_host=5,
+            keepalive_timeout=30
+        )
+        
+        self.session = aiohttp.ClientSession(
+            timeout=timeout,
+            connector=connector,
+            headers={
+                'Content-Type': 'application/json',
+                'Accept': 'application/json'
+            }
+        )
+    
+    async def _cleanup_session(self):
+        """Clean up HTTP session resources"""
+        if self.session:
+            await self.session.close()
+            self.session = None
+    
+    async def _authenticate(self) -> str:
+        """
+        Authenticates with SAP system and retrieves access token
+        Implements OAuth2 or similar authentication mechanism
+        """
+        try:
+            # Check if existing token is still valid
+            if (self.auth_token and self.token_expires_at and 
+                datetime.now() < self.token_expires_at):
+                return self.auth_token
+            
+            if not self.session:
+                await self._initialize_session()
+            
+            # Prepare authentication request
+            auth_data = {
+                'grant_type': 'client_credentials',
+                'client_id': self.config.client_id,
+                'client_secret': self.config.client_secret,
+                'scope': self.config.scope
+            }
+            
+            logger.info("Authenticating with SAP system")
+            
+            async with self.session.post(
+                f"{self.config.base_url}/oauth/token",
+                data=auth_data
+            ) as response:
+                
+                if response.status == 200:
+                    auth_response = await response.json()
+                    self.auth_token = auth_response['access_token']
+                    
+                    # Calculate token expiration
+                    expires_in = auth_response.get('expires_in', 3600)
+                    self.token_expires_at = datetime.now().timestamp() + expires_in - 300  # 5 min buffer
+                    
+                    logger.info("Successfully authenticated with SAP system")
+                    return self.auth_token
+                
+                else:
+                    error_text = await response.text()
+                    logger.error(f"SAP authentication failed: {response.status} - {error_text}")
+                    raise Exception(f"SAP authentication failed: {response.status}")
+        
+        except Exception as e:
+            logger.error(f"Error during SAP authentication: {str(e)}")
+            raise Exception(f"Failed to authenticate with SAP system: {str(e)}")
+    
+    async def get_invoice_status(
+        self, 
+        invoice_data: Dict[str, Any], 
+        invoice_type: InvoiceType
+    ) -> Optional[InvoiceStatus]:
+        """
+        Retrieves invoice status from SAP system based on provided data
+        Handles different query parameters for PO and Non-PO invoices
+        """
+        try:
+            logger.info(f"Querying SAP for {invoice_type} invoice status")
+            
+            # Authenticate before making API calls
+            await self._authenticate()
+            
+            # Build query parameters based on invoice type
+            query_params = self._build_query_params(invoice_data, invoice_type)
+            
+            if not self.session:
+                await self._initialize_session()
+            
+            # Set authorization header
+            headers = {
+                'Authorization': f'Bearer {self.auth_token}',
+                'Content-Type': 'application/json'
+            }
+            
+            # Construct API endpoint based on invoice type
+            endpoint = self._get_api_endpoint(invoice_type)
+            
+            async with self.session.get(
+                f"{self.config.base_url}{endpoint}",
+                params=query_params,
+                headers=headers
+            ) as response:
+                
+                if response.status == 200:
+                    response_data = await response.json()
+                    
+                    # Process SAP response and convert to our model
+                    invoice_status = self._process_sap_response(response_data)
+                    
+                    logger.info(f"Successfully retrieved invoice status from SAP")
+                    return invoice_status
+                
+                elif response.status == 404:
+                    logger.info("Invoice not found in SAP system")
+                    return None
+                
+                else:
+                    error_text = await response.text()
+                    logger.error(f"SAP API error: {response.status} - {error_text}")
+                    raise Exception(f"SAP API error: {response.status}")
+        
+        except Exception as e:
+            logger.error(f"Error querying SAP system: {str(e)}")
+            raise Exception(f"Failed to retrieve invoice status: {str(e)}")
+    
+    def _build_query_params(
+        self, 
+        invoice_data: Dict[str, Any], 
+        invoice_type: InvoiceType
+    ) -> Dict[str, Any]:
+        """
+        Builds query parameters for SAP API based on available invoice data
+        Maps our internal field names to SAP field names
+        """
+        params = {}
+        
+        # Field mapping from our model to SAP field names
+        field_mapping = {
+            'po_number': 'PurchaseOrder',
+            'acr_number': 'ACRNumber',
+            'invoice_number': 'DocumentNumber',
+            'invoice_amount': 'GrossAmount',
+            'invoice_year': 'FiscalYear',
+            'invoice_document_date': 'DocumentDate'
+        }
+        
+        for our_field, sap_field in field_mapping.items():
+            if our_field in invoice_data and invoice_data[our_field]:
+                value = invoice_data[our_field]
+                
+                # Handle date formatting for SAP
+                if our_field == 'invoice_document_date':
+                    if isinstance(value, datetime):
+                        value = value.strftime('%Y-%m-%d')
+                
+                params[sap_field] = value
+        
+        # Add invoice type filter
+        if invoice_type == InvoiceType.PO:
+            params['InvoiceType'] = 'PO'
+        else:
+            params['InvoiceType'] = 'NON_PO'
+        
+        return params
+    
+    def _get_api_endpoint(self, invoice_type: InvoiceType) -> str:
+        """Returns appropriate SAP API endpoint based on invoice type"""
+        if invoice_type == InvoiceType.PO:
+            return "/api/purchase-order-invoices"
+        else:
+            return "/api/supplier-invoices"
+    
+    def _process_sap_response(self, sap_data: Dict[str, Any]) -> InvoiceStatus:
+        """
+        Processes SAP API response and converts to our InvoiceStatus model
+        Handles data transformation and field mapping
+        """
+        try:
+            # Extract relevant fields from SAP response
+            # SAP response structure may vary, this is a generic implementation
+            results = sap_data.get('d', {}).get('results', [])
+            
+            if not results:
+                return None
+            
+            # Take the first matching invoice
+            invoice_data = results[0]
+            
+            # Map SAP fields to our model
+            invoice_status = InvoiceStatus(
+                invoice_id=invoice_data.get('DocumentNumber', ''),
+                status=self._map_sap_status(invoice_data.get('Status', '')),
+                amount=float(invoice_data.get('GrossAmount', 0)),
+                due_date=self._parse_sap_date(invoice_data.get('DueDate')),
+                payment_date=self._parse_sap_date(invoice_data.get('PaymentDate')),
+                vendor_info={
+                    'vendor_id': invoice_data.get('VendorID', ''),
+                    'vendor_name': invoice_data.get('VendorName', '')
+                },
+                additional_details={
+                    'fiscal_year': invoice_data.get('FiscalYear'),
+                    'company_code': invoice_data.get('CompanyCode'),
+                    'currency': invoice_data.get('Currency', 'USD'),
+                    'reference': invoice_data.get('Reference', '')
+                }
+            )
+            
+            return invoice_status
+            
+        except Exception as e:
+            logger.error(f"Error processing SAP response: {str(e)}")
+            raise Exception(f"Failed to process SAP response: {str(e)}")
+    
+    def _map_sap_status(self, sap_status: str) -> str:
+        """Maps SAP status codes to user-friendly status descriptions"""
+        status_mapping = {
+            'PENDING': 'Pending Approval',
+            'APPROVED': 'Approved for Payment',
+            'PAID': 'Payment Completed',
+            'REJECTED': 'Rejected',
+            'CANCELLED': 'Cancelled',
+            'ON_HOLD': 'On Hold',
+            'PROCESSING': 'Under Processing'
+        }
+        
+        return status_mapping.get(sap_status.upper(), sap_status)
+    
+    def _parse_sap_date(self, date_str: Optional[str]) -> Optional[datetime]:
+        """Parses SAP date strings to datetime objects"""
+        if not date_str:
+            return None
+        
+        try:
+            # Handle different SAP date formats
+            if 'T' in date_str:  # ISO format
+                return datetime.fromisoformat(date_str.replace('Z', '+00:00'))
+            else:  # Simple date format
+                return datetime.strptime(date_str, '%Y-%m-%d')
+        except Exception:
+            logger.warning(f"Could not parse SAP date: {date_str}")
+            return None
+
+```
+
+### ServiceNow Integration (backend/app/services/servicenow_service.py)
+
+```python
+"""
+Service for creating ServiceNow interaction tickets
+Handles ticket creation with conversation context
+"""
+
+import aiohttp
+import asyncio
+from typing import Dict, Any, Optional
+import logging
+import json
+import base64
+
+logger = logging.getLogger(__name__)
+
+class ServiceNowService:
+    """
+    Handles ServiceNow API integration for creating support tickets
+    Includes conversation context and user information
+    """
+    
+    def __init__(self, config):
+        self.config = config
+        self.session: Optional[aiohttp.ClientSession] = None
+    
+    async def __aenter__(self):
+        await self._initialize_session()
+        return self
+    
+    async def __aexit__(self, exc_type, exc_val, exc_tb):
+        await self._cleanup_session()
+    
+    async def _initialize_session(self):
+        """Initialize HTTP session with ServiceNow authentication"""
+        auth_string = f"{self.config.username}:{self.config.password}"
+        auth_bytes = auth_string.encode('utf-8')
+        auth_b64 = base64.b64encode(auth_bytes).decode('utf-8')
+        
+        headers = {
+            'Authorization': f'Basic {auth_b64}',
+            'Content-Type': 'application/json',
+            'Accept': 'application/json'
+        }
+        
+        timeout = aiohttp.ClientTimeout(total=30)
+        self.session = aiohttp.ClientSession(
+            headers=headers,
+            timeout=timeout
+        )
+    
+    async def _cleanup_session(self):
+        if self.session:
+            await self.session.close()
+    
+    async def create_ticket(
+        self,
+        user_email: str,
+        conversation_history: str,
+        invoice_data: Dict[str, Any]
+    ) -> str:
+        """
+        Creates ServiceNow interaction ticket with conversation context
+        Returns ticket number for user reference
+        """
+        try:
+            logger.info(f"Creating ServiceNow ticket for user: {user_email}")
+            
+            # Prepare ticket data
+            ticket_data = {
+                'short_description': 'Invoice Status Query - Chatbot Escalation',
+                'description': self._build_ticket_description(
+                    conversation_history, 
+                    invoice_data
+                ),
+                'caller_id': user_email,
+                'category': 'Invoice Management',
+                'subcategory': 'Status Inquiry',
+                'priority': '3',  # Medium priority
+                'state': '1',     # New
+                'assignment_group': self.config.assignment_group
+            }
+            
+            if not self.session:
+                await self._initialize_session()
+            
+            async with self.session.post(
+                f"{self.config.base_url}/api/now/table/incident",
+                json=ticket_data
+            ) as response:
+                
+                if response.status in [200, 201]:
+                    result = await response.json()
+                    ticket_number = result['result']['number']
+                    
+                    logger.info(f"Successfully created ServiceNow ticket: {ticket_number}")
+                    return ticket_number
+                
+                else:
+                    error_text = await response.text()
+                    logger.error(f"ServiceNow API error: {response.status} - {error_text}")
+                    raise Exception(f"Failed to create ServiceNow ticket: {response.status}")
+        
+        except Exception as e:
+            logger.error(f"Error creating ServiceNow ticket: {str(e)}")
+            raise Exception(f"Failed to create support ticket: {str(e)}")
+    
+    def _build_ticket_description(
+        self, 
+        conversation_history: str, 
+        invoice_data: Dict[str, Any]
+    ) -> str:
+        """
+        Builds comprehensive ticket description with all relevant context
+        """
+        description = f"""
+INVOICE STATUS QUERY - CHATBOT ESCALATION
+
+User Query Details:
+{'-' * 50}
+{conversation_history}
+
+Invoice Information Collected:
+{'-' * 50}
+"""
+        
+        for key, value in invoice_data.items():
+            if value and key != 'conversation_history':
+                formatted_key = key.replace('_', ' ').title()
+                description += f"{formatted_key}: {value}\n"
+        
+        description += f"""
+{'-' * 50}
+This ticket was automatically created by the Invoice Status Chatbot.
+Please review the conversation context and assist the user with their invoice query.
+
+Generated on: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
+"""
+        
+        return description
+
+```
+
+### React Frontend (frontend/react-app/src/components/ChatInterface.jsx)
+
+```javascript
+/**
+ * Main Chat Interface Component
+ * Handles user interactions, file uploads, and conversation display
+ */
+
+import React, { useState, useEffect, useRef } from 'react';
+import { Upload, Download, Send, Loader } from 'lucide-react';
+import * as XLSX from 'xlsx';
+
+const ChatInterface = () => {
+  const [messages, setMessages] = useState([]);
+  const [inputMessage, setInputMessage] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
+  const [sessionId, setSessionId] = useState('');
+  const [userType, setUserType] = useState('external');
+  const [uploadedFile, setUploadedFile] = useState(null);
+  const messagesEndRef = useRef(null);
+  const fileInputRef = useRef(null);
+
+  useEffect(() => {
+    // Generate session ID on component mount
+    setSessionId(generateSessionId());
+    
+    // Add initial greeting message
+    setMessages([{
+      id: 1,
+      content: "Hello! I'm your Invoice Status Assistant. I can help you check the status of PO and Non-PO invoices. How can I assist you today?",
+      sender: 'bot',
+      timestamp: new Date()
+    }]);
+  }, []);
+
+  useEffect(() => {
+    scrollToBottom();
+  }, [messages]);
+
+  const generateSessionId = () => {
+    return 'session_' + Math.random().toString(36).substr(2, 9) + '_' + Date.now();
+  };
+
+  const scrollToBottom = () => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  };
+
+  const sendMessage = async () => {
+    if (!inputMessage.trim() && !uploadedFile) return;
+
+    const userMessage = {
+      id: Date.now(),
+      content: inputMessage || 'File uploaded',
+      sender: 'user',
+      timestamp: new Date(),
+      file: uploadedFile
+    };
+
+    setMessages(prev => [...prev, userMessage]);
+    setIsLoading(true);
+
+    try {
+      let response;
+      
+      if (uploadedFile) {
+        // Handle file upload
+        response = await handleFileUpload(uploadedFile);
+      } else {
+        // Handle text message
+        response = await fetch('/api/chat', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            content: inputMessage,
+            user_type: userType,
+            session_id: sessionId
+          })
+        });
+      }
+
+      const data = await response.json();
+      
+      const botMessage = {
+        id: Date.now() + 1,
+        content: data.content,
+        sender: 'bot',
+        timestamp: new Date(),
+        nextStep: data.next_step,
+        collectedInfo: data.collected_info
+      };
+
+      setMessages(prev => [...prev, botMessage]);
+      
+    } catch (error) {
+      console.error('Error sending message:', error);
+      const errorMessage = {
+        id: Date.now() + 1,
+        content: 'Sorry, I encountered an error. Please try again.',
+        sender: 'bot',
+        timestamp: new Date(),
+        isError: true
+      };
+      setMessages(prev => [...prev, errorMessage]);
+    } finally {
+      setIsLoading(false);
+      setInputMessage('');
+      setUploadedFile(null);
+    }
+  };
+
+  const handleFileUpload = async (file) => {
+    // Validate Excel file
+    const validatedData = await validateExcelFile(file);
+    
+    const formData = new FormData();
+    formData.append('file', file);
+    formData.append('session_id', sessionId);
+
+    return await fetch('/api/upload-template', {
+      method: 'POST',
+      body: formData
+    });
+  };
+
+  const validateExcelFile = (file) => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      
+      reader.onload = (e) => {
+        try {
+          const data = new Uint8Array(e.target.result);
+          const workbook = XLSX.read(data, { type: 'array' });
+          const sheetName = workbook.SheetNames[0];
+          const worksheet = workbook.Sheets[sheetName];
+          const jsonData = XLSX.utils.sheet_to_json(worksheet);
+
+          // Validate required columns based on template
+          const requiredColumns = [
+            'po_number', 'acr_number', 'invoice_number', 
+            'invoice_amount', 'invoice_year', 'invoice_document_date'
+          ];
+
+          const fileColumns = Object.keys(jsonData[0] || {}).map(col => 
+            col.toLowerCase().replace(/\s+/g, '_')
+          );
+
+          const hasValidColumns = requiredColumns.some(col => 
+            fileColumns.includes(col)
+          );
+
+          if (!hasValidColumns) {
+            reject(new Error('Excel file must contain at least one of the required columns: ' + requiredColumns.join(', ')));
+            return;
+          }
+
+          if (jsonData.length === 0) {
+            reject(new Error('Excel file contains no data rows'));
+            return;
+          }
+
+          resolve(jsonData);
+        } catch (error) {
+          reject(new Error('Invalid Excel file format'));
+        }
+      };
+
+      reader.onerror = () => reject(new Error('Error reading file'));
+      reader.readAsArrayBuffer(file);
+    });
+  };
+
+  const downloadTemplate = async (invoiceType) => {
+    try {
+      const response = await fetch(`/api/download-template/${invoiceType}`);
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `${invoiceType}_invoice_template.xlsx`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
+    } catch (error) {
+      console.error('Error downloading template:', error);
+    }
+  };
+
+  const handleKeyPress = (e) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      sendMessage();
+    }
+  };
+
+  const formatTimestamp = (timestamp) => {
+    return new Date(timestamp).toLocaleTimeString('en-US', {
+      hour: '2-digit',
+      minute: '2-digit'
+    });
+  };
+
+  return (
+    <div className="flex flex-col h-screen bg-gradient-to-br from-blue-50 to-indigo-100">
+      {/* Header */}
+      <div className="bg-white shadow-lg border-b border-gray-200 p-4">
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-2xl font-bold text-gray-800">Invoice Status Assistant</h1>
+            <p className="text-gray-600">AI-powered invoice inquiry support</p>
+          </div>
+          <div className="flex items-center space-x-4">
+            <select
+              value={userType}
+              onChange={(e) => setUserType(e.target.value)}
+              className="px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+            >
+              <option value="external">External User</option>
+              <option value="internal">Internal User</option>
+            </select>
+            <div className="flex space-x-2">
+              <button
+                onClick={() => downloadTemplate('po')}
+                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center space-x-2"
+              >
+                <Download size={16} />
+                <span>PO Template</span>
+              </button>
+              <button
+                onClick={() => downloadTemplate('non-po')}
+                className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors flex items-center space-x-2"
+              >
