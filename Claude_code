@@ -1,0 +1,1874 @@
+Invoice Status Chatbot - Project Structure
+Directory Structure
+invoice-status-chatbot/
+│
+├── .env.example                    # Environment variables template
+├── .env                           # Environment variables (gitignored)
+├── .gitignore                     # Git ignore file
+├── README.md                      # Project documentation
+├── requirements.txt               # Python dependencies
+├── pyproject.toml                 # Project configuration
+├── docker-compose.yml             # Docker services configuration
+├── Dockerfile                     # Docker container setup
+│
+├── src/
+│   ├── __init__.py
+│   │
+│   ├── main.py                    # FastAPI application entry point
+│   ├── config/
+│   │   ├── __init__.py
+│   │   ├── settings.py            # Configuration settings
+│   │   ├── database.py            # Database configuration
+│   │   └── logging_config.py      # Logging configuration
+│   │
+│   ├── api/
+│   │   ├── __init__.py
+│   │   ├── routes/
+│   │   │   ├── __init__.py
+│   │   │   ├── chat.py            # Chat endpoints
+│   │   │   ├── health.py          # Health check endpoints
+│   │   │   └── webhook.py         # Webhook endpoints
+│   │   ├── dependencies.py        # API dependencies
+│   │   └── middleware.py          # Custom middleware
+│   │
+│   ├── agents/
+│   │   ├── __init__.py
+│   │   ├── base_agent.py          # Base agent class
+│   │   ├── chat_agent.py          # Main chat orchestration agent
+│   │   ├── intent_classifier.py   # Intent classification agent
+│   │   ├── information_extractor.py # Information extraction agent
+│   │   ├── validator_agent.py     # Input validation agent
+│   │   └── response_generator.py  # Response generation agent
+│   │
+│   ├── services/
+│   │   ├── __init__.py
+│   │   ├── sap_service.py         # SAP S4 integration service
+│   │   ├── servicenow_service.py  # ServiceNow integration service
+│   │   ├── translation_service.py # Multi-language support service
+│   │   ├── memory_service.py      # Memory management service
+│   │   └── notification_service.py # Notification service
+│   │
+│   ├── models/
+│   │   ├── __init__.py
+│   │   ├── chat_models.py         # Chat-related Pydantic models
+│   │   ├── invoice_models.py      # Invoice-related models
+│   │   ├── user_models.py         # User-related models
+│   │   ├── api_models.py          # API request/response models
+│   │   └── database_models.py     # SQLAlchemy database models
+│   │
+│   ├── database/
+│   │   ├── __init__.py
+│   │   ├── connection.py          # Database connection management
+│   │   ├── repositories/
+│   │   │   ├── __init__.py
+│   │   │   ├── base_repository.py # Base repository pattern
+│   │   │   ├── chat_repository.py # Chat history repository
+│   │   │   ├── user_repository.py # User data repository
+│   │   │   └── analytics_repository.py # Analytics repository
+│   │   └── migrations/
+│   │       ├── __init__.py
+│   │       └── versions/          # Alembic migration files
+│   │
+│   ├── memory/
+│   │   ├── __init__.py
+│   │   ├── redis_memory.py        # Redis-based short-term memory
+│   │   ├── langmem_memory.py      # LangMem implementation
+│   │   └── hana_memory.py         # SAP HANA long-term memory
+│   │
+│   ├── workflows/
+│   │   ├── __init__.py
+│   │   ├── base_workflow.py       # Base workflow class
+│   │   ├── po_invoice_workflow.py # PO invoice workflow
+│   │   ├── non_po_workflow.py     # Non-PO (ACR) invoice workflow
+│   │   └── ticket_creation_workflow.py # ServiceNow ticket workflow
+│   │
+│   ├── utils/
+│   │   ├── __init__.py
+│   │   ├── validators.py          # Input validation utilities
+│   │   ├── formatters.py          # Response formatting utilities
+│   │   ├── exceptions.py          # Custom exception classes
+│   │   ├── helpers.py             # General helper functions
+│   │   └── constants.py           # Application constants
+│   │
+│   ├── guardrails/
+│   │   ├── __init__.py
+│   │   ├── input_guardrails.py    # Input validation and safety
+│   │   ├── output_guardrails.py   # Output filtering and safety
+│   │   └── content_filters.py     # Content filtering rules
+│   │
+│   └── prompts/
+│       ├── __init__.py
+│       ├── system_prompts.py      # System prompts for different agents
+│       ├── intent_prompts.py      # Intent classification prompts
+│       ├── extraction_prompts.py  # Information extraction prompts
+│       └── response_prompts.py    # Response generation prompts
+│
+├── tests/
+│   ├── __init__.py
+│   ├── conftest.py                # Pytest configuration
+│   ├── fixtures/
+│   │   ├── __init__.py
+│   │   ├── sample_data.py         # Test data fixtures
+│   │   └── mock_responses.py      # Mock API responses
+│   ├── unit/
+│   │   ├── __init__.py
+│   │   ├── test_agents/
+│   │   │   ├── __init__.py
+│   │   │   ├── test_chat_agent.py
+│   │   │   ├── test_intent_classifier.py
+│   │   │   └── test_information_extractor.py
+│   │   ├── test_services/
+│   │   │   ├── __init__.py
+│   │   │   ├── test_sap_service.py
+│   │   │   └── test_servicenow_service.py
+│   │   ├── test_workflows/
+│   │   │   ├── __init__.py
+│   │   │   ├── test_po_workflow.py
+│   │   │   └── test_non_po_workflow.py
+│   │   └── test_utils/
+│   │       ├── __init__.py
+│   │       ├── test_validators.py
+│   │       └── test_formatters.py
+│   ├── integration/
+│   │   ├── __init__.py
+│   │   ├── test_api_endpoints.py
+│   │   ├── test_database_integration.py
+│   │   └── test_external_services.py
+│   └── e2e/
+│       ├── __init__.py
+│       ├── test_complete_workflows.py
+│       └── test_user_journeys.py
+│
+├── monitoring/
+│   ├── __init__.py
+│   ├── metrics.py                 # Custom metrics collection
+│   ├── tracing.py                 # Distributed tracing setup
+│   └── health_checks.py           # Health check implementations
+│
+├── evaluation/
+│   ├── __init__.py
+│   ├── deepeval_config.py         # DeepEval configuration
+│   ├── test_cases.py              # LLM evaluation test cases
+│   ├── metrics/
+│   │   ├── __init__.py
+│   │   ├── accuracy_metrics.py    # Accuracy evaluation metrics
+│   │   ├── response_quality.py    # Response quality metrics
+│   │   └── conversation_flow.py   # Conversation flow metrics
+│   └── reports/
+│       └── evaluation_results/    # Evaluation report outputs
+│
+├── scripts/
+│   ├── __init__.py
+│   ├── setup_database.py          # Database setup script
+│   ├── run_migrations.py          # Database migration runner
+│   ├── seed_data.py               # Test data seeding
+│   └── deploy.py                  # Deployment script
+│
+├── docs/
+│   ├── api/
+│   │   ├── endpoints.md           # API documentation
+│   │   └── schemas.md             # API schema documentation
+│   ├── architecture/
+│   │   ├── system_design.md       # System architecture
+│   │   ├── workflow_diagrams.md   # Workflow documentation
+│   │   └── database_schema.md     # Database design
+│   ├── deployment/
+│   │   ├── setup_guide.md         # Setup instructions
+│   │   ├── configuration.md       # Configuration guide
+│   │   └── troubleshooting.md     # Troubleshooting guide
+│   └── user_guide/
+│       ├── chatbot_usage.md       # User guide for chatbot
+│       └── supported_languages.md # Multi-language support
+│
+├── deployment/
+│   ├── kubernetes/
+│   │   ├── deployment.yaml        # K8s deployment
+│   │   ├── service.yaml           # K8s service
+│   │   ├── configmap.yaml         # K8s config map
+│   │   └── ingress.yaml           # K8s ingress
+│   ├── helm/
+│   │   ├── Chart.yaml             # Helm chart
+│   │   ├── values.yaml            # Helm values
+│   │   └── templates/             # Helm templates
+│   └── terraform/
+│       ├── main.tf                # Terraform main config
+│       ├── variables.tf           # Terraform variables
+│       └── outputs.tf             # Terraform outputs
+│
+└── .github/
+    └── workflows/
+        ├── ci.yml                 # Continuous Integration
+        ├── cd.yml                 # Continuous Deployment
+        ├── security-scan.yml      # Security scanning
+        └── evaluation.yml         # LLM evaluation pipeline
+
+# src/agents/intent_classifier.py
+"""
+Intent classification agent
+"""
+import json
+import logging
+from typing import Dict, Any
+from langchain.schema import SystemMessage, HumanMessage
+
+from src.agents.base_agent import BaseAgent
+from src.prompts.intent_prompts import INTENT_CLASSIFICATION_PROMPT
+from src.models.chat_models import ConversationState
+
+logger = logging.getLogger(__name__)
+
+class IntentClassifierAgent(BaseAgent):
+    """Agent for classifying user intents"""
+    
+    def __init__(self):
+        super().__init__(
+            name="IntentClassifier",
+            system_prompt=INTENT_CLASSIFICATION_PROMPT
+        )
+    
+    async def process(self, input_data: Dict[str, Any]) -> Dict[str, Any]:
+        """Classify user intent"""
+        try:
+            message = input_data["message"]
+            context = input_data.get("context", {})
+            language = input_data.get("language", "en")
+            
+            # Create messages for LLM
+            messages = [
+                SystemMessage(content=self.system_prompt),
+                SystemMessage(content=f"User language: {language}"),
+                SystemMessage(content=f"Current context: {json.dumps(context, indent=2)}"),
+                HumanMessage(content=message)
+            ]
+            
+            # Call LLM
+            response = await self.call_llm(messages, temperature=0.1)
+            
+            # Parse response
+            try:
+                result = json.loads(response)
+            except json.JSONDecodeError:
+                # Fallback parsing
+                result = self._fallback_parse(response, message)
+            
+            return {# src/main.py
+"""
+FastAPI application entry point for Invoice Status Chatbot
+"""
+import asyncio
+import logging
+from contextlib import asynccontextmanager
+from typing import AsyncGenerator
+
+from fastapi import FastAPI, Request
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.middleware.trustedhost import TrustedHostMiddleware
+from fastapi.responses import JSONResponse
+import uvicorn
+from opentelemetry import trace
+from opentelemetry.exporter.jaeger.thrift import JaegerExporter
+from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
+from opentelemetry.sdk.trace import TracerProvider
+from opentelemetry.sdk.trace.export import BatchSpanProcessor
+
+from src.api.routes import chat, health, webhook
+from src.api.middleware import LoggingMiddleware, ErrorHandlingMiddleware
+from src.config.settings import get_settings
+from src.config.database import init_database, close_database
+from src.config.logging_config import setup_logging
+from src.utils.exceptions import ChatbotException
+from src.memory.redis_memory import RedisMemoryManager
+from src.services.memory_service import MemoryService
+
+# Initialize settings
+settings = get_settings()
+
+# Setup logging
+setup_logging()
+logger = logging.getLogger(__name__)
+
+# Setup tracing
+def setup_tracing():
+    """Setup OpenTelemetry tracing"""
+    if settings.ENABLE_TRACING:
+        trace.set_tracer_provider(TracerProvider())
+        tracer = trace.get_tracer(__name__)
+        
+        jaeger_exporter = JaegerExporter(
+            agent_host_name=settings.JAEGER_HOST,
+            agent_port=settings.JAEGER_PORT,
+        )
+        
+        span_processor = BatchSpanProcessor(jaeger_exporter)
+        trace.get_tracer_provider().add_span_processor(span_processor)
+
+@asynccontextmanager
+async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
+    """Application lifespan manager"""
+    logger.info("Starting Invoice Status Chatbot application")
+    
+    # Initialize database
+    await init_database()
+    
+    # Initialize Redis memory manager
+    redis_manager = RedisMemoryManager()
+    await redis_manager.connect()
+    
+    # Initialize memory service
+    memory_service = MemoryService()
+    await memory_service.initialize()
+    
+    logger.info("Application startup completed")
+    
+    yield
+    
+    # Cleanup
+    logger.info("Shutting down application")
+    await close_database()
+    await redis_manager.disconnect()
+    logger.info("Application shutdown completed")
+
+# Create FastAPI application
+app = FastAPI(
+    title="Invoice Status Chatbot API",
+    description="Multi-lingual chatbot for invoice status queries",
+    version="1.0.0",
+    lifespan=lifespan,
+    docs_url=f"{settings.API_PREFIX}/docs",
+    redoc_url=f"{settings.API_PREFIX}/redoc",
+)
+
+# Setup tracing
+setup_tracing()
+if settings.ENABLE_TRACING:
+    FastAPIInstrumentor.instrument_app(app)
+
+# Add middleware
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=settings.ALLOWED_ORIGINS,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+app.add_middleware(
+    TrustedHostMiddleware,
+    allowed_hosts=settings.ALLOWED_HOSTS
+)
+
+app.add_middleware(ErrorHandlingMiddleware)
+app.add_middleware(LoggingMiddleware)
+
+# Exception handlers
+@app.exception_handler(ChatbotException)
+async def chatbot_exception_handler(request: Request, exc: ChatbotException):
+    """Handle custom chatbot exceptions"""
+    logger.error(f"Chatbot exception: {exc.message}", extra={"error_code": exc.error_code})
+    return JSONResponse(
+        status_code=exc.status_code,
+        content={
+            "error": exc.error_code,
+            "message": exc.message,
+            "details": exc.details
+        }
+    )
+
+@app.exception_handler(Exception)
+async def general_exception_handler(request: Request, exc: Exception):
+    """Handle general exceptions"""
+    logger.exception("Unhandled exception occurred")
+    return JSONResponse(
+        status_code=500,
+        content={
+            "error": "INTERNAL_SERVER_ERROR",
+            "message": "An internal server error occurred"
+        }
+    )
+
+# Include routers
+app.include_router(health.router, prefix=f"{settings.API_PREFIX}/health", tags=["Health"])
+app.include_router(chat.router, prefix=f"{settings.API_PREFIX}/chat", tags=["Chat"])
+app.include_router(webhook.router, prefix=f"{settings.API_PREFIX}/webhook", tags=["Webhook"])
+
+if __name__ == "__main__":
+    uvicorn.run(
+        "src.main:app",
+        host="0.0.0.0",
+        port=8000,
+        reload=settings.DEBUG,
+        log_config=None  # Use our custom logging config
+    )
+
+
+# src/config/__init__.py
+"""Configuration package"""
+
+# src/config/settings.py
+"""
+Application configuration settings
+"""
+from functools import lru_cache
+from typing import List, Optional
+from pydantic import BaseSettings, Field
+
+
+class Settings(BaseSettings):
+    """Application settings"""
+    
+    # Application settings
+    APP_NAME: str = "Invoice Status Chatbot"
+    DEBUG: bool = False
+    API_PREFIX: str = "/api/v1"
+    ALLOWED_ORIGINS: List[str] = ["*"]
+    ALLOWED_HOSTS: List[str] = ["*"]
+    
+    # Database settings
+    DATABASE_URL: str = Field(..., env="DATABASE_URL")
+    HANA_HOST: str = Field(..., env="HANA_HOST")
+    HANA_PORT: int = Field(443, env="HANA_PORT")
+    HANA_USER: str = Field(..., env="HANA_USER")
+    HANA_PASSWORD: str = Field(..., env="HANA_PASSWORD")
+    HANA_DATABASE: str = Field(..., env="HANA_DATABASE")
+    
+    # Redis settings
+    REDIS_URL: str = Field("redis://localhost:6379", env="REDIS_URL")
+    REDIS_TTL: int = Field(3600, env="REDIS_TTL")  # 1 hour
+    
+    # LLM settings
+    OPENAI_API_KEY: str = Field(..., env="OPENAI_API_KEY")
+    OPENAI_MODEL: str = Field("gpt-4", env="OPENAI_MODEL")
+    OPENAI_TEMPERATURE: float = Field(0.1, env="OPENAI_TEMPERATURE")
+    MAX_TOKENS: int = Field(2000, env="MAX_TOKENS")
+    
+    # SAP S4 settings
+    SAP_BASE_URL: str = Field(..., env="SAP_BASE_URL")
+    SAP_USERNAME: str = Field(..., env="SAP_USERNAME")
+    SAP_PASSWORD: str = Field(..., env="SAP_PASSWORD")
+    SAP_CLIENT: str = Field(..., env="SAP_CLIENT")
+    SAP_TIMEOUT: int = Field(30, env="SAP_TIMEOUT")
+    
+    # ServiceNow settings
+    SERVICENOW_INSTANCE: str = Field(..., env="SERVICENOW_INSTANCE")
+    SERVICENOW_USERNAME: str = Field(..., env="SERVICENOW_USERNAME")
+    SERVICENOW_PASSWORD: str = Field(..., env="SERVICENOW_PASSWORD")
+    SERVICENOW_TABLE: str = Field("incident", env="SERVICENOW_TABLE")
+    
+    # Tracing settings
+    ENABLE_TRACING: bool = Field(False, env="ENABLE_TRACING")
+    JAEGER_HOST: str = Field("localhost", env="JAEGER_HOST")
+    JAEGER_PORT: int = Field(6831, env="JAEGER_PORT")
+    
+    # Translation settings
+    GOOGLE_TRANSLATE_API_KEY: Optional[str] = Field(None, env="GOOGLE_TRANSLATE_API_KEY")
+    SUPPORTED_LANGUAGES: List[str] = ["en", "es", "fr", "de", "hi", "zh"]
+    
+    # Security settings
+    SECRET_KEY: str = Field(..., env="SECRET_KEY")
+    ACCESS_TOKEN_EXPIRE_MINUTES: int = Field(30, env="ACCESS_TOKEN_EXPIRE_MINUTES")
+    
+    # Business settings
+    MAX_INVOICES_PER_QUERY: int = Field(50, env="MAX_INVOICES_PER_QUERY")
+    SESSION_TIMEOUT_MINUTES: int = Field(30, env="SESSION_TIMEOUT_MINUTES")
+    
+    class Config:
+        env_file = ".env"
+        case_sensitive = True
+
+
+@lru_cache()
+def get_settings() -> Settings:
+    """Get cached settings instance"""
+    return Settings()
+
+
+# src/config/database.py
+"""
+Database configuration and connection management
+"""
+import asyncio
+import logging
+from typing import AsyncGenerator
+from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
+from sqlalchemy.orm import declarative_base
+from sqlalchemy.pool import NullPool
+import hdbcli.dbapi as hana_db
+
+from src.config.settings import get_settings
+
+logger = logging.getLogger(__name__)
+settings = get_settings()
+
+# SQLAlchemy setup for general database operations
+engine = create_async_engine(
+    settings.DATABASE_URL,
+    poolclass=NullPool if settings.DEBUG else None,
+    echo=settings.DEBUG,
+)
+
+AsyncSessionLocal = async_sessionmaker(
+    engine,
+    class_=AsyncSession,
+    expire_on_commit=False
+)
+
+Base = declarative_base()
+
+# SAP HANA connection for long-term memory
+hana_connection = None
+
+async def get_database_session() -> AsyncGenerator[AsyncSession, None]:
+    """Get database session dependency"""
+    async with AsyncSessionLocal() as session:
+        try:
+            yield session
+        except Exception:
+            await session.rollback()
+            raise
+        finally:
+            await session.close()
+
+async def init_database():
+    """Initialize database connections"""
+    global hana_connection
+    
+    try:
+        # Create tables
+        async with engine.begin() as conn:
+            await conn.run_sync(Base.metadata.create_all)
+        
+        # Initialize HANA connection
+        hana_connection = hana_db.connect(
+            address=settings.HANA_HOST,
+            port=settings.HANA_PORT,
+            user=settings.HANA_USER,
+            password=settings.HANA_PASSWORD,
+            database=settings.HANA_DATABASE
+        )
+        
+        logger.info("Database connections initialized successfully")
+        
+    except Exception as e:
+        logger.error(f"Failed to initialize database: {str(e)}")
+        raise
+
+async def close_database():
+    """Close database connections"""
+    global hana_connection
+    
+    try:
+        await engine.dispose()
+        
+        if hana_connection:
+            hana_connection.close()
+            hana_connection = None
+            
+        logger.info("Database connections closed successfully")
+        
+    except Exception as e:
+        logger.error(f"Error closing database connections: {str(e)}")
+
+def get_hana_connection():
+    """Get SAP HANA connection"""
+    return hana_connection
+
+
+# src/config/logging_config.py
+"""
+Logging configuration
+"""
+import logging
+import logging.config
+import sys
+from typing import Dict, Any
+
+from src.config.settings import get_settings
+
+settings = get_settings()
+
+def setup_logging():
+    """Setup application logging configuration"""
+    
+    logging_config: Dict[str, Any] = {
+        "version": 1,
+        "disable_existing_loggers": False,
+        "formatters": {
+            "detailed": {
+                "format": "%(asctime)s - %(name)s - %(levelname)s - %(message)s - %(pathname)s:%(lineno)d",
+                "datefmt": "%Y-%m-%d %H:%M:%S"
+            },
+            "simple": {
+                "format": "%(levelname)s - %(message)s"
+            },
+            "json": {
+                "format": "%(asctime)s %(name)s %(levelname)s %(message)s",
+                "class": "pythonjsonlogger.jsonlogger.JsonFormatter"
+            }
+        },
+        "handlers": {
+            "console": {
+                "class": "logging.StreamHandler",
+                "level": "INFO",
+                "formatter": "detailed",
+                "stream": sys.stdout
+            },
+            "file": {
+                "class": "logging.handlers.RotatingFileHandler",
+                "level": "DEBUG" if settings.DEBUG else "INFO",
+                "formatter": "detailed",
+                "filename": "logs/chatbot.log",
+                "maxBytes": 10485760,  # 10MB
+                "backupCount": 5
+            },
+            "error_file": {
+                "class": "logging.handlers.RotatingFileHandler",
+                "level": "ERROR",
+                "formatter": "detailed",
+                "filename": "logs/errors.log",
+                "maxBytes": 10485760,  # 10MB
+                "backupCount": 5
+            }
+        },
+        "loggers": {
+            "": {  # root logger
+                "level": "DEBUG" if settings.DEBUG else "INFO",
+                "handlers": ["console", "file", "error_file"]
+            },
+            "uvicorn": {
+                "level": "INFO",
+                "handlers": ["console"],
+                "propagate": False
+            },
+            "sqlalchemy": {
+                "level": "WARNING",
+                "handlers": ["file"],
+                "propagate": False
+            }
+        }
+    }
+    
+    # Create logs directory
+    import os
+    os.makedirs("logs", exist_ok=True)
+    
+    logging.config.dictConfig(logging_config)
+
+
+# src/api/__init__.py
+"""API package"""
+
+# src/api/dependencies.py
+"""
+API dependencies
+"""
+import logging
+from typing import Optional
+from fastapi import Depends, HTTPException, Header
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from src.config.database import get_database_session
+from src.services.memory_service import MemoryService
+from src.memory.redis_memory import RedisMemoryManager
+
+logger = logging.getLogger(__name__)
+
+async def get_memory_service() -> MemoryService:
+    """Get memory service dependency"""
+    return MemoryService()
+
+async def get_redis_manager() -> RedisMemoryManager:
+    """Get Redis memory manager dependency"""
+    return RedisMemoryManager()
+
+async def get_session_id(
+    x_session_id: Optional[str] = Header(None, alias="X-Session-ID")
+) -> str:
+    """Get or generate session ID"""
+    if not x_session_id:
+        import uuid
+        x_session_id = str(uuid.uuid4())
+    return x_session_id
+
+async def get_user_language(
+    accept_language: Optional[str] = Header("en", alias="Accept-Language")
+) -> str:
+    """Extract user language from headers"""
+    if accept_language:
+        # Parse accept-language header
+        languages = accept_language.split(",")
+        primary_lang = languages[0].split("-")[0].strip()
+        return primary_lang if primary_lang in ["en", "es", "fr", "de", "hi", "zh"] else "en"
+    return "en"
+
+
+# src/api/middleware.py
+"""
+Custom middleware
+"""
+import time
+import logging
+import uuid
+from typing import Callable
+from fastapi import Request, Response
+from starlette.middleware.base import BaseHTTPMiddleware
+
+logger = logging.getLogger(__name__)
+
+class LoggingMiddleware(BaseHTTPMiddleware):
+    """Middleware for request/response logging"""
+    
+    async def dispatch(self, request: Request, call_next: Callable) -> Response:
+        # Generate correlation ID
+        correlation_id = str(uuid.uuid4())
+        request.state.correlation_id = correlation_id
+        
+        # Log request
+        start_time = time.time()
+        logger.info(
+            f"Request started",
+            extra={
+                "correlation_id": correlation_id,
+                "method": request.method,
+                "url": str(request.url),
+                "client_ip": request.client.host if request.client else None
+            }
+        )
+        
+        # Process request
+        response = await call_next(request)
+        
+        # Log response
+        process_time = time.time() - start_time
+        logger.info(
+            f"Request completed",
+            extra={
+                "correlation_id": correlation_id,
+                "status_code": response.status_code,
+                "process_time": process_time
+            }
+        )
+        
+        # Add correlation ID to response headers
+        response.headers["X-Correlation-ID"] = correlation_id
+        response.headers["X-Process-Time"] = str(process_time)
+        
+        return response
+
+class ErrorHandlingMiddleware(BaseHTTPMiddleware):
+    """Middleware for global error handling"""
+    
+    async def dispatch(self, request: Request, call_next: Callable) -> Response:
+        try:
+            return await call_next(request)
+        except Exception as exc:
+            correlation_id = getattr(request.state, 'correlation_id', 'unknown')
+            logger.exception(
+                f"Unhandled exception in request",
+                extra={"correlation_id": correlation_id}
+            )
+            
+            # Return generic error response
+            from fastapi.responses import JSONResponse
+            return JSONResponse(
+                status_code=500,
+                content={
+                    "error": "INTERNAL_SERVER_ERROR",
+                    "message": "An internal server error occurred",
+                    "correlation_id": correlation_id
+                }
+            )
+
+
+# src/api/routes/__init__.py
+"""API routes package"""
+
+# src/api/routes/health.py
+"""
+Health check endpoints
+"""
+import logging
+from typing import Dict, Any
+from fastapi import APIRouter, Depends
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from src.config.database import get_database_session, get_hana_connection
+from src.memory.redis_memory import RedisMemoryManager
+from src.api.dependencies import get_redis_manager
+
+logger = logging.getLogger(__name__)
+router = APIRouter()
+
+@router.get("/")
+async def health_check() -> Dict[str, str]:
+    """Basic health check endpoint"""
+    return {"status": "healthy", "service": "invoice-status-chatbot"}
+
+@router.get("/detailed")
+async def detailed_health_check(
+    db: AsyncSession = Depends(get_database_session),
+    redis_manager: RedisMemoryManager = Depends(get_redis_manager)
+) -> Dict[str, Any]:
+    """Detailed health check with dependency verification"""
+    health_status = {
+        "status": "healthy",
+        "service": "invoice-status-chatbot",
+        "checks": {}
+    }
+    
+    # Check database connectivity
+    try:
+        await db.execute("SELECT 1")
+        health_status["checks"]["database"] = {"status": "healthy"}
+    except Exception as e:
+        logger.error(f"Database health check failed: {str(e)}")
+        health_status["checks"]["database"] = {"status": "unhealthy", "error": str(e)}
+        health_status["status"] = "unhealthy"
+    
+    # Check HANA connectivity
+    try:
+        hana_conn = get_hana_connection()
+        if hana_conn and not hana_conn.isconnected():
+            raise Exception("HANA connection not active")
+        health_status["checks"]["hana"] = {"status": "healthy"}
+    except Exception as e:
+        logger.error(f"HANA health check failed: {str(e)}")
+        health_status["checks"]["hana"] = {"status": "unhealthy", "error": str(e)}
+        health_status["status"] = "unhealthy"
+    
+    # Check Redis connectivity
+    try:
+        await redis_manager.ping()
+        health_status["checks"]["redis"] = {"status": "healthy"}
+    except Exception as e:
+        logger.error(f"Redis health check failed: {str(e)}")
+        health_status["checks"]["redis"] = {"status": "unhealthy", "error": str(e)}
+        health_status["status"] = "unhealthy"
+    
+    return health_status
+
+
+# src/api/routes/chat.py
+"""
+Chat endpoints
+"""
+import logging
+from typing import Dict, Any, List
+from fastapi import APIRouter, Depends, HTTPException
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from src.models.chat_models import ChatRequest, ChatResponse, ChatSession
+from src.models.api_models import SessionInfo
+from src.config.database import get_database_session
+from src.api.dependencies import get_session_id, get_user_language, get_memory_service
+from src.agents.chat_agent import ChatAgent
+from src.services.memory_service import MemoryService
+from src.utils.exceptions import ChatbotException
+
+logger = logging.getLogger(__name__)
+router = APIRouter()
+
+@router.post("/message", response_model=ChatResponse)
+async def send_message(
+    request: ChatRequest,
+    session_id: str = Depends(get_session_id),
+    user_language: str = Depends(get_user_language),
+    db: AsyncSession = Depends(get_database_session),
+    memory_service: MemoryService = Depends(get_memory_service)
+) -> ChatResponse:
+    """Send a message to the chatbot"""
+    
+    try:
+        logger.info(f"Processing chat message for session {session_id}")
+        
+        # Initialize chat agent
+        chat_agent = ChatAgent(
+            session_id=session_id,
+            user_language=user_language,
+            memory_service=memory_service,
+            db_session=db
+        )
+        
+        # Process the message
+        response = await chat_agent.process_message(request.message)
+        
+        logger.info(f"Successfully processed message for session {session_id}")
+        return response
+        
+    except ChatbotException:
+        raise
+    except Exception as e:
+        logger.exception(f"Error processing chat message for session {session_id}")
+        raise HTTPException(
+            status_code=500,
+            detail="Failed to process chat message"
+        )
+
+@router.get("/session/{session_id}", response_model=SessionInfo)
+async def get_session_info(
+    session_id: str,
+    memory_service: MemoryService = Depends(get_memory_service)
+) -> SessionInfo:
+    """Get session information"""
+    
+    try:
+        session_data = await memory_service.get_session_data(session_id)
+        if not session_data:
+            raise HTTPException(status_code=404, detail="Session not found")
+        
+        return SessionInfo(
+            session_id=session_id,
+            created_at=session_data.get("created_at"),
+            last_activity=session_data.get("last_activity"),
+            message_count=session_data.get("message_count", 0),
+            current_state=session_data.get("current_state", "active"),
+            user_language=session_data.get("user_language", "en")
+        )
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.exception(f"Error retrieving session info for {session_id}")
+        raise HTTPException(
+            status_code=500,
+            detail="Failed to retrieve session information"
+        )
+
+@router.delete("/session/{session_id}")
+async def clear_session(
+    session_id: str,
+    memory_service: MemoryService = Depends(get_memory_service)
+) -> Dict[str, str]:
+    """Clear session data"""
+    
+    try:
+        await memory_service.clear_session(session_id)
+        return {"message": "Session cleared successfully"}
+        
+    except Exception as e:
+        logger.exception(f"Error clearing session {session_id}")
+        raise HTTPException(
+            status_code=500,
+            detail="Failed to clear session"
+        )
+
+@router.get("/sessions", response_model=List[SessionInfo])
+async def list_sessions(
+    memory_service: MemoryService = Depends(get_memory_service),
+    limit: int = 10,
+    offset: int = 0
+) -> List[SessionInfo]:
+    """List active sessions"""
+    
+    try:
+        sessions = await memory_service.list_sessions(limit=limit, offset=offset)
+        return sessions
+        
+    except Exception as e:
+        logger.exception("Error listing sessions")
+        raise HTTPException(
+            status_code=500,
+            detail="Failed to list sessions"
+        )
+
+
+# src/api/routes/webhook.py
+"""
+Webhook endpoints for external integrations
+"""
+import logging
+from typing import Dict, Any
+from fastapi import APIRouter, Request, HTTPException, BackgroundTasks
+
+from src.services.servicenow_service import ServiceNowService
+from src.utils.exceptions import ChatbotException
+
+logger = logging.getLogger(__name__)
+router = APIRouter()
+
+@router.post("/servicenow/callback")
+async def servicenow_callback(
+    request: Request,
+    background_tasks: BackgroundTasks
+) -> Dict[str, str]:
+    """Handle ServiceNow webhook callbacks"""
+    
+    try:
+        payload = await request.json()
+        logger.info(f"Received ServiceNow webhook: {payload}")
+        
+        # Process webhook in background
+        background_tasks.add_task(process_servicenow_webhook, payload)
+        
+        return {"status": "accepted"}
+        
+    except Exception as e:
+        logger.exception("Error processing ServiceNow webhook")
+        raise HTTPException(
+            status_code=500,
+            detail="Failed to process webhook"
+        )
+
+async def process_servicenow_webhook(payload: Dict[str, Any]):
+    """Process ServiceNow webhook payload"""
+    try:
+        # Handle different webhook types
+        webhook_type = payload.get("type")
+        
+        if webhook_type == "incident_updated":
+            # Handle incident update
+            incident_id = payload.get("incident_id")
+            status = payload.get("status")
+            logger.info(f"ServiceNow incident {incident_id} updated to {status}")
+            
+        elif webhook_type == "incident_resolved":
+            # Handle incident resolution
+            incident_id = payload.get("incident_id")
+            resolution = payload.get("resolution")
+            logger.info(f"ServiceNow incident {incident_id} resolved: {resolution}")
+            
+        else:
+            logger.warning(f"Unknown webhook type: {webhook_type}")
+            
+    except Exception as e:
+        logger.exception("Error processing ServiceNow webhook payload")
+
+
+# src/models/__init__.py
+"""Models package"""
+
+# src/models/chat_models.py
+"""
+Chat-related Pydantic models
+"""
+from datetime import datetime
+from typing import Dict, Any, List, Optional
+from pydantic import BaseModel, Field
+from enum import Enum
+
+class MessageType(str, Enum):
+    """Message type enumeration"""
+    USER = "user"
+    ASSISTANT = "assistant"
+    SYSTEM = "system"
+
+class ConversationState(str, Enum):
+    """Conversation state enumeration"""
+    GREETING = "greeting"
+    INTENT_CLASSIFICATION = "intent_classification"
+    INFORMATION_COLLECTION = "information_collection"
+    PROCESSING = "processing"
+    RESPONSE_GENERATED = "response_generated"
+    SATISFACTION_CHECK = "satisfaction_check"
+    TICKET_CREATION = "ticket_creation"
+    COMPLETED = "completed"
+    ERROR = "error"
+
+class InvoiceType(str, Enum):
+    """Invoice type enumeration"""
+    PO = "po"
+    NON_PO = "non_po"
+
+class ChatMessage(BaseModel):
+    """Individual chat message model"""
+    message_id: str = Field(..., description="Unique message identifier")
+    session_id: str = Field(..., description="Session identifier")
+    message_type: MessageType = Field(..., description="Type of message")
+    content: str = Field(..., description="Message content")
+    timestamp: datetime = Field(default_factory=datetime.now, description="Message timestamp")
+    metadata: Optional[Dict[str, Any]] = Field(None, description="Additional message metadata")
+
+class ChatRequest(BaseModel):
+    """Chat request model"""
+    message: str = Field(..., min_length=1, max_length=1000, description="User message")
+    context: Optional[Dict[str, Any]] = Field(None, description="Additional context")
+
+class ChatResponse(BaseModel):
+    """Chat response model"""
+    message: str = Field(..., description="Assistant response")
+    session_id: str = Field(..., description="Session identifier")
+    conversation_state: ConversationState = Field(..., description="Current conversation state")
+    suggested_actions: Optional[List[str]] = Field(None, description="Suggested user actions")
+    requires_input: bool = Field(False, description="Whether additional input is required")
+    metadata: Optional[Dict[str, Any]] = Field(None, description="Response metadata")
+
+class ChatSession(BaseModel):
+    """Chat session model"""
+    session_id: str = Field(..., description="Unique session identifier")
+    user_language: str = Field("en", description="User's preferred language")
+    conversation_state: ConversationState = Field(ConversationState.GREETING, description="Current state")
+    invoice_type: Optional[InvoiceType] = Field(None, description="Type of invoice being queried")
+    collected_data: Dict[str, Any] = Field(default_factory=dict, description="Collected user data")
+    messages: List[ChatMessage] = Field(default_factory=list, description="Session messages")
+    created_at: datetime = Field(default_factory=datetime.now, description="Session creation time")
+    last_activity: datetime = Field(default_factory=datetime.now, description="Last activity time")
+    is_active: bool = Field(True, description="Whether session is active")
+
+class ConversationContext(BaseModel):
+    """Conversation context model"""
+    session_id: str
+    user_language: str
+    conversation_state: ConversationState
+    invoice_type: Optional[InvoiceType] = None
+    collected_data: Dict[str, Any] = Field(default_factory=dict)
+    last_user_message: Optional[str] = None
+    retry_count: int = 0
+    satisfaction_confirmed: bool = False
+
+
+# src/models/invoice_models.py
+"""
+Invoice-related Pydantic models
+"""
+from datetime import date, datetime
+from typing import List, Optional, Dict, Any
+from pydantic import BaseModel, Field, validator
+
+class POInvoiceQuery(BaseModel):
+    """PO invoice query model"""
+    po_number: str = Field(..., min_length=1, description="Purchase Order number")
+    invoice_number: str = Field(..., min_length=1, description="Invoice number")
+    check_all_invoices: bool = Field(False, description="Check all invoices for given PO")
+
+class NonPOInvoiceQuery(BaseModel):
+    """Non-PO (ACR) invoice query model"""
+    acr_number: Optional[str] = Field(None, description="ACR number")
+    invoice_number: Optional[str] = Field(None, description="Invoice number")
+    invoice_document_date: date = Field(..., description="Invoice document date")
+    
+    @validator('acr_number', 'invoice_number')
+    def validate_identifiers(cls, v, values):
+        """Ensure at least one identifier is provided"""
+        acr_number = values.get('acr_number')
+        invoice_number = v
+        
+        if not acr_number and not invoice_number:
+            raise ValueError('Either ACR number or Invoice number must be provided')
+        
+        return v
+
+class InvoiceStatusResponse(BaseModel):
+    """Invoice status response model"""
+    invoice_number: str = Field(..., description="Invoice number")
+    status_code: str = Field(..., description="Status code")
+    status_description: str = Field(..., description="Human-readable status description")
+    po_number: Optional[str] = Field(None, description="Purchase Order number")
+    vendor_name: Optional[str] = Field(None, description="Vendor name")
+    invoice_amount: Optional[float] = Field(None, description="Invoice amount")
+    invoice_date: Optional[date] = Field(None, description="Invoice date")
+    due_date: Optional[date] = Field(None, description="Due date")
+    payment_date: Optional[date] = Field(None, description="Payment date")
+    additional_info: Optional[Dict[str, Any]] = Field(None, description="Additional information")
+
+class InvoiceQueryRequest(BaseModel):
+    """Combined invoice query request model"""
+    query_type: str = Field(..., description="Type of query (po or non_po)")
+    po_queries: Optional[List[POInvoiceQuery]] = Field(None, description="PO invoice queries")
+    non_po_queries: Optional[List[NonPOInvoiceQuery]] = Field(None, description="Non-PO invoice queries")
+    
+    @validator('po_queries', 'non_po_queries')
+    def validate_queries(cls, v, values):
+        """Validate query data based on query type"""
+        query_type = values.get('query_type')
+        
+        if query_type == 'po' and not values.get('po_queries'):
+            raise ValueError('PO queries required for PO query type')
+        elif query_type == 'non_po' and not values.get('non_po_queries'):
+            raise ValueError('Non-PO queries required for Non-PO query type')
+            
+        return v
+
+class InvoiceQueryResponse(BaseModel):
+    """Invoice query response model"""
+    success: bool = Field(..., description="Whether query was successful")
+    invoices: List[InvoiceStatusResponse] = Field(default_factory=list, description="Invoice status results")
+    error_message: Optional[str] = Field(None, description="Error message if query failed")
+    total_found: int = Field(0, description="Total number of invoices found")
+
+
+# src/models/user_models.py
+"""
+User-related Pydantic models
+"""
+from datetime import datetime
+from typing import Optional, Dict, Any
+from pydantic import BaseModel, Field, EmailStr
+
+class UserInfo(BaseModel):
+    """User information model"""
+    user_id: Optional[str] = Field(None, description="User identifier")
+    email: Optional[EmailStr] = Field(None, description="User email address")
+    vendor_number: Optional[str] = Field(None, description="Vendor number")
+    preferred_language: str = Field("en", description="Preferred language")
+    session_id: str = Field(..., description="Current session ID")
+
+class TicketCreationRequest(BaseModel):
+    """ServiceNow ticket creation request model"""
+    user_email: EmailStr = Field(..., description="User email address")
+    vendor_number: str = Field(..., description="Vendor number")
+    subject: str = Field(..., description="Ticket subject")
+    description: str = Field(..., description="Ticket description")
+    conversation_history: str = Field(..., description="Full conversation history")
+    priority: str = Field("3", description="Ticket priority")
+    category: str = Field("Invoice Query", description="Ticket category")
+
+class TicketCreationResponse(BaseModel):
+    """ServiceNow ticket creation response model"""
+    success: bool = Field(..., description="Whether ticket creation was successful")
+    ticket_number: Optional[str] = Field(None, description="Created ticket number")
+    error_message: Optional[str] = Field(None, description="Error message if creation failed")
+
+
+# src/models/api_models.py
+"""
+API-specific Pydantic models
+"""
+from datetime import datetime
+from typing import Optional, Dict, Any, List
+from pydantic import BaseModel, Field
+
+class SessionInfo(BaseModel):
+    """Session information model"""
+    session_id: str = Field(..., description="Session identifier")
+    created_at: Optional[datetime] = Field(None, description="Session creation time")
+    last_activity: Optional[datetime] = Field(None, description="Last activity time")
+    message_count: int = Field(0, description="Number of messages in session")
+    current_state: str = Field("active", description="Current session state")
+    user_language: str = Field("en", description="User's language")
+
+class ErrorResponse(BaseModel):
+    """Error response model"""
+    error: str = Field(..., description="Error code")
+    message: str = Field(..., description="Error message")
+    details: Optional[Dict[str, Any]] = Field(None, description="Additional error details")
+    correlation_id: Optional[str] = Field(None, description="Request correlation ID")
+
+
+# src/models/database_models.py
+"""
+SQLAlchemy database models
+"""
+from datetime import datetime
+from typing import Dict, Any
+from sqlalchemy import Column, String, DateTime, Text, Boolean, Integer, JSON, Float
+from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy.sql import func
+import uuid
+
+from src.config.database import Base
+
+class ChatSessionDB(Base):
+    """Chat session database model"""
+    __tablename__ = "chat_sessions"
+    
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    session_id = Column(String(255), unique=True, nullable=False, index=True)
+    user_language = Column(String(10), default="en")
+    conversation_state = Column(String(50), default="greeting")
+    invoice_type = Column(String(20), nullable=True)
+    collected_data = Column(JSON, default=dict)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    last_activity = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+    is_active = Column(Boolean, default=True)
+    message_count = Column(Integer, default=0)
+
+class ChatMessageDB(Base):
+    """Chat message database model"""
+    __tablename__ = "chat_messages"
+    
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    message_id = Column(String(255), unique=True, nullable=False, index=True)
+    session_id = Column(String(255), nullable=False, index=True)
+    message_type = Column(String(20), nullable=False)
+    content = Column(Text, nullable=False)
+    timestamp = Column(DateTime(timezone=True), server_default=func.now())
+    metadata = Column(JSON, default=dict)
+
+class InvoiceQueryDB(Base):
+    """Invoice query database model for analytics"""
+    __tablename__ = "invoice_queries"
+    
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    session_id = Column(String(255), nullable=False, index=True)
+    query_type = Column(String(20), nullable=False)
+    query_data = Column(JSON, nullable=False)
+    response_data = Column(JSON, nullable=True)
+    success = Column(Boolean, default=False)
+    error_message = Column(Text, nullable=True)
+    query_timestamp = Column(DateTime(timezone=True), server_default=func.now())
+    response_timestamp = Column(DateTime(timezone=True), nullable=True)
+    processing_time = Column(Float, nullable=True)
+
+class ServiceTicketDB(Base):
+    """Service ticket database model"""
+    __tablename__ = "service_tickets"
+    
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    session_id = Column(String(255), nullable=False, index=True)
+    ticket_number = Column(String(100), unique=True, nullable=False)
+    user_email = Column(String(255), nullable=False)
+    vendor_number = Column(String(100), nullable=True)
+    subject = Column(String(500), nullable=False)
+    description = Column(Text, nullable=False)
+    conversation_history = Column(Text, nullable=False)
+    status = Column(String(50), default="open")
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+
+# src/agents/__init__.py
+"""Agents package"""
+
+# src/agents/base_agent.py
+"""
+Base agent class for common functionality
+"""
+import logging
+from abc import ABC, abstractmethod
+from typing import Dict, Any, Optional
+from openai import AsyncOpenAI
+from langchain.schema import BaseMessage, HumanMessage, AIMessage, SystemMessage
+
+from src.config.settings import get_settings
+from src.utils.exceptions import AgentException
+
+logger = logging.getLogger(__name__)
+settings = get_settings()
+
+class BaseAgent(ABC):
+    """Base class for all agents"""
+    
+    def __init__(self, name: str, system_prompt: str):
+        self.name = name
+        self.system_prompt = system_prompt
+        self.openai_client = AsyncOpenAI(api_key=settings.OPENAI_API_KEY)
+        self.logger = logging.getLogger(f"{__name__}.{self.name}")
+    
+    @abstractmethod
+    async def process(self, input_data: Dict[str, Any]) -> Dict[str, Any]:
+        """Process input data and return result"""
+        pass
+    
+    async def call_llm(
+        self,
+        messages: list[BaseMessage],
+        temperature: float = None,
+        max_tokens: int = None,
+        **kwargs
+    ) -> str:
+        """Call OpenAI LLM with messages"""
+        try:
+            # Convert messages to OpenAI format
+            openai_messages = []
+            for message in messages:
+                if isinstance(message, SystemMessage):
+                    openai_messages.append({"role": "system", "content": message.content})
+                elif isinstance(message, HumanMessage):
+                    openai_messages.append({"role": "user", "content": message.content})
+                elif isinstance(message, AIMessage):
+                    openai_messages.append({"role": "assistant", "content": message.content})
+            
+            # Call OpenAI API
+            response = await self.openai_client.chat.completions.create(
+                model=settings.OPENAI_MODEL,
+                messages=openai_messages,
+                temperature=temperature or settings.OPENAI_TEMPERATURE,
+                max_tokens=max_tokens or settings.MAX_TOKENS,
+                **kwargs
+            )
+            
+            return response.choices[0].message.content
+            
+        except Exception as e:
+            self.logger.error(f"LLM call failed: {str(e)}")
+            raise AgentException(f"LLM call failed: {str(e)}")
+    
+    def create_messages(self, user_input: str, context: Optional[Dict[str, Any]] = None) -> list[BaseMessage]:
+        """Create message list for LLM call"""
+        messages = [SystemMessage(content=self.system_prompt)]
+        
+        if context:
+            context_str = self._format_context(context)
+            messages.append(SystemMessage(content=f"Context: {context_str}"))
+        
+        messages.append(HumanMessage(content=user_input))
+        return messages
+    
+    def _format_context(self, context: Dict[str, Any]) -> str:
+        """Format context dictionary as string"""
+        formatted_parts = []
+        for key, value in context.items():
+            formatted_parts.append(f"{key}: {value}")
+        return "\n".join(formatted_parts)
+
+
+# src/agents/chat_agent.py
+"""
+Main chat orchestration agent using LangGraph
+"""
+import json
+import logging
+from typing import Dict, Any, List, Optional
+from datetime import datetime
+from langgraph.graph import StateGraph, END
+from langgraph.prebuilt import ToolExecutor
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from src.agents.base_agent import BaseAgent
+from src.agents.intent_classifier import IntentClassifierAgent
+from src.agents.information_extractor import InformationExtractorAgent
+from src.agents.validator_agent import ValidatorAgent
+from src.agents.response_generator import ResponseGeneratorAgent
+from src.models.chat_models import ChatResponse, ConversationState, ConversationContext
+from src.services.memory_service import MemoryService
+from src.services.sap_service import SAPService
+from src.services.servicenow_service import ServiceNowService
+from src.services.translation_service import TranslationService
+from src.utils.exceptions import ChatbotException
+from src.workflows.po_invoice_workflow import POInvoiceWorkflow
+from src.workflows.non_po_workflow import NonPOWorkflow
+from src.workflows.ticket_creation_workflow import TicketCreationWorkflow
+
+logger = logging.getLogger(__name__)
+
+class ChatAgentState(Dict[str, Any]):
+    """Chat agent state for LangGraph"""
+    session_id: str
+    user_language: str
+    conversation_state: ConversationState
+    user_message: str
+    bot_response: str
+    context: ConversationContext
+    intent: Optional[str] = None
+    extracted_data: Optional[Dict[str, Any]] = None
+    validation_result: Optional[Dict[str, Any]] = None
+    invoice_results: Optional[List[Dict[str, Any]]] = None
+    satisfaction_confirmed: Optional[bool] = None
+    ticket_number: Optional[str] = None
+    error_message: Optional[str] = None
+
+class ChatAgent(BaseAgent):
+    """Main chat orchestration agent"""
+    
+    def __init__(
+        self,
+        session_id: str,
+        user_language: str,
+        memory_service: MemoryService,
+        db_session: AsyncSession
+    ):
+        super().__init__(
+            name="ChatAgent",
+            system_prompt="You are an intelligent invoice status chatbot that helps users query invoice information."
+        )
+        
+        self.session_id = session_id
+        self.user_language = user_language
+        self.memory_service = memory_service
+        self.db_session = db_session
+        
+        # Initialize sub-agents
+        self.intent_classifier = IntentClassifierAgent()
+        self.information_extractor = InformationExtractorAgent()
+        self.validator_agent = ValidatorAgent()
+        self.response_generator = ResponseGeneratorAgent()
+        
+        # Initialize services
+        self.sap_service = SAPService()
+        self.servicenow_service = ServiceNowService()
+        self.translation_service = TranslationService()
+        
+        # Initialize workflows
+        self.po_workflow = POInvoiceWorkflow(self.sap_service)
+        self.non_po_workflow = NonPOWorkflow(self.sap_service)
+        self.ticket_workflow = TicketCreationWorkflow(self.servicenow_service)
+        
+        # Build LangGraph workflow
+        self.workflow = self._build_workflow()
+    
+    def _build_workflow(self) -> StateGraph:
+        """Build LangGraph workflow"""
+        workflow = StateGraph(ChatAgentState)
+        
+        # Add nodes
+        workflow.add_node("classify_intent", self._classify_intent)
+        workflow.add_node("extract_information", self._extract_information)
+        workflow.add_node("validate_data", self._validate_data)
+        workflow.add_node("process_invoice_query", self._process_invoice_query)
+        workflow.add_node("check_satisfaction", self._check_satisfaction)
+        workflow.add_node("create_ticket", self._create_ticket)
+        workflow.add_node("generate_response", self._generate_response)
+        workflow.add_node("handle_error", self._handle_error)
+        
+        # Define edges
+        workflow.set_entry_point("classify_intent")
+        
+        # Intent classification routing
+        workflow.add_conditional_edges(
+            "classify_intent",
+            self._route_after_intent,
+            {
+                "extract_info": "extract_information",
+                "generate_response": "generate_response",
+                "error": "handle_error"
+            }
+        )
+        
+        # Information extraction routing
+        workflow.add_conditional_edges(
+            "extract_information",
+            self._route_after_extraction,
+            {
+                "validate": "validate_data",
+                "generate_response": "generate_response",
+                "error": "handle_error"
+            }
+        )
+        
+        # Validation routing
+        workflow.add_conditional_edges(
+            "validate_data",
+            self._route_after_validation,
+            {
+                "process_query": "process_invoice_query",
+                "generate_response": "generate_response",
+                "error": "handle_error"
+            }
+        )
+        
+        # Invoice query processing routing
+        workflow.add_conditional_edges(
+            "process_invoice_query",
+            self._route_after_processing,
+            {
+                "check_satisfaction": "check_satisfaction",
+                "generate_response": "generate_response",
+                "error": "handle_error"
+            }
+        )
+        
+        # Satisfaction check routing
+        workflow.add_conditional_edges(
+            "check_satisfaction",
+            self._route_after_satisfaction,
+            {
+                "create_ticket": "create_ticket",
+                "generate_response": "generate_response",
+                "error": "handle_error"
+            }
+        )
+        
+        # Ticket creation routing
+        workflow.add_edges("create_ticket", "generate_response")
+        
+        # Final nodes
+        workflow.add_edges("generate_response", END)
+        workflow.add_edges("handle_error", END)
+        
+        return workflow.compile()
+    
+    async def process_message(self, message: str) -> ChatResponse:
+        """Process incoming user message"""
+        try:
+            # Load conversation context
+            context = await self._load_context()
+            
+            # Initialize state
+            state = ChatAgentState(
+                session_id=self.session_id,
+                user_language=self.user_language,
+                conversation_state=context.conversation_state,
+                user_message=message,
+                bot_response="",
+                context=context
+            )
+            
+            # Run workflow
+            result = await self.workflow.ainvoke(state)
+            
+            # Save context
+            await self._save_context(result["context"])
+            
+            # Save message history
+            await self._save_message_history(message, result["bot_response"])
+            
+            # Create response
+            return ChatResponse(
+                message=result["bot_response"],
+                session_id=self.session_id,
+                conversation_state=result["conversation_state"],
+                requires_input=result.get("requires_input", False),
+                suggested_actions=result.get("suggested_actions"),
+                metadata=result.get("metadata")
+            )
+            
+        except Exception as e:
+            logger.exception(f"Error processing message for session {self.session_id}")
+            raise ChatbotException(f"Failed to process message: {str(e)}")
+    
+    async def _load_context(self) -> ConversationContext:
+        """Load conversation context from memory"""
+        session_data = await self.memory_service.get_session_data(self.session_id)
+        
+        if not session_data:
+            # Create new context
+            context = ConversationContext(
+                session_id=self.session_id,
+                user_language=self.user_language,
+                conversation_state=ConversationState.GREETING
+            )
+        else:
+            # Load existing context
+            context = ConversationContext(**session_data)
+        
+        return context
+    
+    async def _save_context(self, context: ConversationContext):
+        """Save conversation context to memory"""
+        context_data = context.dict()
+        context_data["last_activity"] = datetime.now().isoformat()
+        
+        await self.memory_service.save_session_data(
+            self.session_id,
+            context_data
+        )
+    
+    async def _save_message_history(self, user_message: str, bot_response: str):
+        """Save message history to database"""
+        await self.memory_service.save_message(
+            session_id=self.session_id,
+            user_message=user_message,
+            bot_response=bot_response
+        )
+    
+    # Workflow node implementations
+    async def _classify_intent(self, state: ChatAgentState) -> ChatAgentState:
+        """Classify user intent"""
+        try:
+            result = await self.intent_classifier.process({
+                "message": state["user_message"],
+                "context": state["context"].dict(),
+                "language": state["user_language"]
+            })
+            
+            state["intent"] = result["intent"]
+            state["context"].conversation_state = ConversationState(result["next_state"])
+            
+            return state
+            
+        except Exception as e:
+            state["error_message"] = f"Intent classification failed: {str(e)}"
+            return state
+    
+    async def _extract_information(self, state: ChatAgentState) -> ChatAgentState:
+        """Extract required information from user message"""
+        try:
+            result = await self.information_extractor.process({
+                "message": state["user_message"],
+                "intent": state["intent"],
+                "context": state["context"].dict(),
+                "language": state["user_language"]
+            })
+            
+            state["extracted_data"] = result["extracted_data"]
+            state["context"].collected_data.update(result["extracted_data"])
+            
+            return state
+            
+        except Exception as e:
+            state["error_message"] = f"Information extraction failed: {str(e)}"
+            return state
+    
+    async def _validate_data(self, state: ChatAgentState) -> ChatAgentState:
+        """Validate extracted data"""
+        try:
+            result = await self.validator_agent.process({
+                "extracted_data": state["extracted_data"],
+                "context": state["context"].dict(),
+                "intent": state["intent"]
+            })
+            
+            state["validation_result"] = result
+            
+            return state
+            
+        except Exception as e:
+            state["error_message"] = f"Data validation failed: {str(e)}"
+            return state
+    
+    async def _process_invoice_query(self, state: ChatAgentState) -> ChatAgentState:
+        """Process invoice query using appropriate workflow"""
+        try:
+            if state["intent"] == "po_invoice_query":
+                result = await self.po_workflow.execute(state["context"].collected_data)
+            elif state["intent"] == "non_po_invoice_query":
+                result = await self.non_po_workflow.execute(state["context"].collected_data)
+            else:
+                raise ValueError(f"Unknown intent for invoice processing: {state['intent']}")
+            
+            state["invoice_results"] = result["invoices"]
+            state["context"].conversation_state = ConversationState.RESPONSE_GENERATED
+            
+            return state
+            
+        except Exception as e:
+            state["error_message"] = f"Invoice query processing failed: {str(e)}"
+            return state
+    
+    async def _check_satisfaction(self, state: ChatAgentState) -> ChatAgentState:
+        """Check user satisfaction with results"""
+        try:
+            # This would typically involve analyzing user response
+            # For now, we'll set it based on context
+            satisfaction_response = state["user_message"].lower().strip()
+            
+            if satisfaction_response in ["yes", "y", "satisfied", "good", "ok"]:
+                state["satisfaction_confirmed"] = True
+                state["context"].satisfaction_confirmed = True
+                state["context"].conversation_state = ConversationState.COMPLETED
+            elif satisfaction_response in ["no", "n", "not satisfied", "help", "issue"]:
+                state["satisfaction_confirmed"] = False
+                state["context"].conversation_state = ConversationState.TICKET_CREATION
+            
+            return state
+            
+        except Exception as e:
+            state["error_message"] = f"Satisfaction check failed: {str(e)}"
+            return state
+    
+    async def _create_ticket(self, state: ChatAgentState) -> ChatAgentState:
+        """Create ServiceNow ticket"""
+        try:
+            # Extract user information for ticket creation
+            user_data = state["context"].collected_data.get("user_info", {})
+            
+            result = await self.ticket_workflow.execute({
+                "user_email": user_data.get("email"),
+                "vendor_number": user_data.get("vendor_number"),
+                "conversation_history": await self._get_conversation_history(),
+                "session_id": state["session_id"]
+            })
+            
+            state["ticket_number"] = result["ticket_number"]
+            state["context"].conversation_state = ConversationState.COMPLETED
+            
+            return state
+            
+        except Exception as e:
+            state["error_message"] = f"Ticket creation failed: {str(e)}"
+            return state
+    
+    async def _generate_response(self, state: ChatAgentState) -> ChatAgentState:
+        """Generate appropriate response"""
+        try:
+            result = await self.response_generator.process({
+                "conversation_state": state["context"].conversation_state,
+                "intent": state.get("intent"),
+                "extracted_data": state.get("extracted_data"),
+                "validation_result": state.get("validation_result"),
+                "invoice_results": state.get("invoice_results"),
+                "satisfaction_confirmed": state.get("satisfaction_confirmed"),
+                "ticket_number": state.get("ticket_number"),
+                "error_message": state.get("error_message"),
+                "context": state["context"].dict(),
+                "language": state["user_language"]
+            })
+            
+            state["bot_response"] = result["response"]
+            state["conversation_state"] = state["context"].conversation_state
+            
+            # Translate response if needed
+            if state["user_language"] != "en":
+                translated_response = await self.translation_service.translate_text(
+                    state["bot_response"],
+                    target_language=state["user_language"]
+                )
+                state["bot_response"] = translated_response
+            
+            return state
+            
+        except Exception as e:
+            state["error_message"] = f"Response generation failed: {str(e)}"
+            return state
+    
+    async def _handle_error(self, state: ChatAgentState) -> ChatAgentState:
+        """Handle errors and generate error response"""
+        error_msg = state.get("error_message", "An unexpected error occurred")
+        
+        state["bot_response"] = (
+            f"I apologize, but I encountered an issue: {error_msg}. "
+            "Please try again or contact support if the problem persists."
+        )
+        state["conversation_state"] = ConversationState.ERROR
+        
+        return state
+    
+    # Routing functions
+    def _route_after_intent(self, state: ChatAgentState) -> str:
+        """Route after intent classification"""
+        if state.get("error_message"):
+            return "error"
+        
+        intent = state.get("intent")
+        if intent in ["po_invoice_query", "non_po_invoice_query"]:
+            return "extract_info"
+        else:
+            return "generate_response"
+    
+    def _route_after_extraction(self, state: ChatAgentState) -> str:
+        """Route after information extraction"""
+        if state.get("error_message"):
+            return "error"
+        
+        if state.get("extracted_data"):
+            return "validate"
+        else:
+            return "generate_response"
+    
+    def _route_after_validation(self, state: ChatAgentState) -> str:
+        """Route after data validation"""
+        if state.get("error_message"):
+            return "error"
+        
+        validation_result = state.get("validation_result")
+        if validation_result and validation_result.get("is_valid"):
+            return "process_query"
+        else:
+            return "generate_response"
+    
+    def _route_after_processing(self, state: ChatAgentState) -> str:
+        """Route after invoice processing"""
+        if state.get("error_message"):
+            return "error"
+        
+        if state.get("invoice_results"):
+            return "check_satisfaction"
+        else:
+            return "generate_response"
+    
+    def _route_after_satisfaction(self, state: ChatAgentState) -> str:
+        """Route after satisfaction check"""
+        if state.get("error_message"):
+            return "error"
+        
+        satisfaction = state.get("satisfaction_confirmed")
+        if satisfaction is False:
+            return "create_ticket"
+        else:
+            return "generate_response"
+    
+    async def _get_conversation_history(self) -> str:
+        """Get conversation history for ticket creation"""
+        messages = await self.memory_service.get_message_history(self.session_id)
+        
+        history_parts = []
+        for msg in messages:
+            role = "User" if msg["message_type"] == "user" else "Assistant"
+            history_parts.append(f"{role}: {msg['content']}")
+        
+        return "\n".join(history_parts)
+    
+    async def process(self, input_data: Dict[str, Any]) -> Dict[str, Any]:
+        """Process method for base agent compatibility"""
+        message = input_data.get("message", "")
+        response = await self.process_message(message)
+        return response.dict()
